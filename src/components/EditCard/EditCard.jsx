@@ -9,9 +9,7 @@ const TOOL_LIST = [
   { id: 'line', icon: '📏', label: 'Line' },
   { id: 'rectangle', icon: '▭', label: 'Rectangle' },
   { id: 'circle', icon: '⭕', label: 'Circle' },
-  { id: 'fill', icon: '🪣', label: 'Fill' },
-  { id: 'text', icon: '🔤', label: 'Text' },
-  { id: 'eyedropper', icon: '🎯', label: 'Eyedropper' },
+
 ];
 
 const DEFAULT_TOOLBOX = {
@@ -235,31 +233,6 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
           >
             🗑 Clear
           </button>
-        </div>
-
-        <div className="advanced-topbar-group">
-          <button
-            type="button"
-            className="editor-btn"
-            onClick={() => activeRef.current?.zoomOut?.()}
-          >
-            −
-          </button>
-          <button
-            type="button"
-            className="editor-btn"
-            onClick={() => activeRef.current?.fitToView?.()}
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            className="editor-btn"
-            onClick={() => activeRef.current?.zoomIn?.()}
-          >
-            +
-          </button>
-          <span className="zoom-value">{Math.round(activeStatus.zoom * 100)}%</span>
         </div>
 
         <input

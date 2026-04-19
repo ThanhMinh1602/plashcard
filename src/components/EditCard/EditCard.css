@@ -294,7 +294,7 @@
 }
 .edit-card-flip-scene {
   width: min(100%, 980px);
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 1;
   perspective: 1800px;
   position: relative;
 }
