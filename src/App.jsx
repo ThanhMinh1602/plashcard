@@ -11,10 +11,9 @@ import './App.css';
 function App() {
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState('login');
-  const [currentPage, setCurrentPage] = useState('list'); // 'list' or 'edit'
+  const [currentPage, setCurrentPage] = useState('list');
   const [editingCard, setEditingCard] = useState(null);
 
-  // Kiểm tra trạng thái đăng nhập
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -38,7 +37,6 @@ function App() {
   };
 
   const handleCardSaved = () => {
-    // Reload list when card is saved
     setCurrentPage('list');
   };
 
@@ -48,20 +46,24 @@ function App() {
     return <Login onSwitch={() => setAuthMode('register')} onForgot={() => setAuthMode('forgot')} />;
   }
 
+  const isEditing = currentPage === 'edit';
+
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="header-left">
-            <h1 className="app-title">✏️ Flashcard</h1>
-            <p className="header-subtitle">Vẽ và học từ vựng</p>
+    <div className={`app-container ${isEditing ? 'editor-mode' : ''}`}>
+      {!isEditing && (
+        <header className="app-header">
+          <div className="header-content">
+            <div className="header-left">
+              <h1 className="app-title">✏️ Flashcard</h1>
+              <p className="header-subtitle">Vẽ và học từ vựng</p>
+            </div>
+            <div className="header-right">
+              <span className="user-greeting">Chào, <strong>{user.email}</strong></span>
+              <button onClick={() => signOut(auth)} className="logout-btn">Đăng xuất</button>
+            </div>
           </div>
-          <div className="header-right">
-            <span className="user-greeting">Chào, <strong>{user.email}</strong></span>
-            <button onClick={() => signOut(auth)} className="logout-btn">Đăng xuất</button>
-          </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       <main className="app-main">
         {currentPage === 'list' ? (
