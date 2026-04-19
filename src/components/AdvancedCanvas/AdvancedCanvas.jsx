@@ -38,6 +38,9 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   const interactionRef = useRef(null);
   const docSizeRef = useRef({ width: 0, height: 0 });
 
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [layers, setLayers] = useState([]);
   const [activeLayerId, setActiveLayerId] = useState(null);
@@ -52,6 +55,14 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
   const [historyStep, setHistoryStep] = useState(0);
   const [historyLength, setHistoryLength] = useState(1);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
 
   useImperativeHandle(ref, () => ({
     toDataURL: () => exportComposite(),
@@ -81,9 +92,11 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
     const rect = canvas.getBoundingClientRect();
     const { clientX, clientY } = getClientPoint(e);
+    const currentPan = panRef.current;
+    const currentZoom = zoomRef.current;
 
-    const x = (clientX - rect.left - pan.x) / zoom;
-    const y = (clientY - rect.top - pan.y) / zoom;
+    const x = (clientX - rect.left - currentPan.x) / currentZoom;
+    const y = (clientY - rect.top - currentPan.y) / currentZoom;
 
     return {
       x: clamp(x, 0, docSizeRef.current.width),
@@ -120,6 +133,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     const { width, height } = docSizeRef.current;
     const id = makeId();
     const canvas = createOffscreenCanvas(width, height);
+
     layerStoreRef.current.set(id, canvas);
 
     return {
@@ -223,11 +237,13 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
       1
     );
 
-    setZoom(nextZoom);
-    setPan({
+    const nextPan = {
       x: (displayWidth - docWidth * nextZoom) / 2,
       y: (displayHeight - docHeight * nextZoom) / 2,
-    });
+    };
+
+    setZoom(nextZoom);
+    setPan(nextPan);
   };
 
   const renderComposite = (layerList = layers, preview = null) => {
@@ -247,6 +263,8 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
     const ctx = canvas.getContext('2d');
     const { width: docWidth, height: docHeight } = docSizeRef.current;
+    const currentPan = panRef.current;
+    const currentZoom = zoomRef.current;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, displaySize.width, displaySize.height);
@@ -255,8 +273,8 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     ctx.fillRect(0, 0, displaySize.width, displaySize.height);
 
     ctx.save();
-    ctx.translate(pan.x, pan.y);
-    ctx.scale(zoom, zoom);
+    ctx.translate(currentPan.x, currentPan.y);
+    ctx.scale(currentZoom, currentZoom);
 
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, docWidth, docHeight);
@@ -307,7 +325,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     }
 
     ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1 / zoom;
+    ctx.lineWidth = 1 / currentZoom;
     ctx.strokeRect(0, 0, docWidth, docHeight);
 
     ctx.restore();
@@ -472,7 +490,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
         mode: 'pan',
         startClientX: point.clientX,
         startClientY: point.clientY,
-        startPan: { ...pan },
+        startPan: { ...panRef.current },
       };
       return;
     }
@@ -807,28 +825,6 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     link.click();
   };
 
-  const handleWheel = (e) => {
-    e.preventDefault();
-
-    const canvas = viewCanvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-
-    const cursorX = e.clientX - rect.left;
-    const cursorY = e.clientY - rect.top;
-    const docX = (cursorX - pan.x) / zoom;
-    const docY = (cursorY - pan.y) / zoom;
-
-    const nextZoom = clamp(zoom * (e.deltaY < 0 ? 1.1 : 0.9), 0.2, 5);
-
-    setZoom(nextZoom);
-    setPan({
-      x: cursorX - docX * nextZoom,
-      y: cursorY - docY * nextZoom,
-    });
-  };
-
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
@@ -892,6 +888,40 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   useEffect(() => {
     renderComposite();
   }, [layers, zoom, pan, displaySize]);
+
+  useEffect(() => {
+    const canvas = viewCanvasRef.current;
+    if (!canvas) return;
+
+    const wheelListener = (event) => {
+      event.preventDefault();
+
+      const rect = canvas.getBoundingClientRect();
+      const currentZoom = zoomRef.current;
+      const currentPan = panRef.current;
+
+      const cursorX = event.clientX - rect.left;
+      const cursorY = event.clientY - rect.top;
+      const docX = (cursorX - currentPan.x) / currentZoom;
+      const docY = (cursorY - currentPan.y) / currentZoom;
+
+      const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+      const nextZoom = clamp(currentZoom * zoomFactor, 0.2, 5);
+      const nextPan = {
+        x: cursorX - docX * nextZoom,
+        y: cursorY - docY * nextZoom,
+      };
+
+      setZoom(nextZoom);
+      setPan(nextPan);
+    };
+
+    canvas.addEventListener('wheel', wheelListener, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('wheel', wheelListener);
+    };
+  }, []);
 
   useEffect(() => {
     return () => releasePointer();
@@ -1026,7 +1056,6 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
             onPointerMove={moveInteraction}
             onPointerUp={endInteraction}
             onPointerCancel={endInteraction}
-            onWheel={handleWheel}
           />
         </div>
 
