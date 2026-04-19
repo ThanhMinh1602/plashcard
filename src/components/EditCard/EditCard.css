@@ -1,10 +1,21 @@
 .edit-card-page {
+  --card-max-size: 720px;
+  --editor-padding: clamp(12px, 2vw, 24px);
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --border-dark: #d1d5db;
+  --text: #111827;
+  --muted: #4b5563;
+  --shadow-card:
+    0 24px 60px rgba(15, 23, 42, 0.18),
+    0 10px 24px rgba(15, 23, 42, 0.08);
+
   width: 100%;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--surface);
 }
 
 .edit-card-top {
@@ -14,8 +25,8 @@
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
 }
 
 .edit-card-top-left,
@@ -28,28 +39,63 @@
 .edit-card-top h2 {
   margin: 0;
   font-size: 18px;
-  color: #111827;
+  color: var(--text);
+}
+
+.edit-page-btn,
+.face-btn,
+.editor-btn,
+.tool-icon-btn {
+  border: 1px solid var(--border-dark);
+  background: var(--surface);
+  cursor: pointer;
+  transition: 0.2s ease;
+  font-weight: 600;
+}
+
+.edit-page-btn,
+.face-btn {
+  border-radius: 10px;
+}
+
+.editor-btn,
+.tool-icon-btn {
+  border-radius: 8px;
 }
 
 .edit-page-btn {
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  border-radius: 10px;
   padding: 10px 14px;
   font-weight: 700;
-  cursor: pointer;
-  transition: 0.2s ease;
 }
 
-.edit-page-btn:hover:not(:disabled) {
+.face-btn {
+  padding: 10px 12px;
+  font-weight: 700;
+}
+
+.editor-btn {
+  padding: 8px 10px;
+}
+
+.edit-page-btn:hover:not(:disabled),
+.face-btn:hover:not(:disabled),
+.editor-btn:hover:not(:disabled),
+.tool-icon-btn:hover:not(:disabled) {
   background: #f9fafb;
   border-color: #9ca3af;
 }
 
-.edit-page-btn.primary {
+.edit-page-btn.primary,
+.tool-icon-btn.compact.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  color: #ffffff;
   border-color: transparent;
+}
+
+.face-btn.active {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
 }
 
 .edit-page-btn:disabled,
@@ -58,30 +104,14 @@
   cursor: not-allowed;
 }
 
-.face-btn {
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.face-btn.active {
-  background: #111827;
-  color: white;
-  border-color: #111827;
-}
-
 .edit-card-toolbar {
   flex-shrink: 0;
   display: flex;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   overflow-x: auto;
 }
 
@@ -90,7 +120,7 @@
   align-items: center;
   gap: 8px;
   padding-right: 10px;
-  border-right: 1px solid #e5e7eb;
+  border-right: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -102,39 +132,19 @@
   gap: 6px;
 }
 
-.editor-btn,
-.tool-icon-btn {
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: 0.2s ease;
-  font-weight: 600;
-}
-
-.editor-btn {
-  padding: 8px 10px;
-}
-
-.editor-btn:hover,
-.tool-icon-btn:hover {
-  background: #f9fafb;
-  border-color: #9ca3af;
-}
-
 .editor-label {
   font-size: 12px;
   font-weight: 700;
-  color: #4b5563;
+  color: var(--muted);
   white-space: nowrap;
 }
 
 .color-input {
   width: 42px;
   height: 36px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-dark);
   border-radius: 8px;
-  background: white;
+  background: #ffffff;
   cursor: pointer;
 }
 
@@ -144,28 +154,22 @@
 }
 
 .zoom-value {
-  font-size: 12px;
-  font-weight: 700;
-  color: #4b5563;
   min-width: 48px;
   text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
 }
 
 .tool-icon-btn.compact {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   min-width: 56px;
   min-height: 50px;
   padding: 6px 8px;
-}
-
-.tool-icon-btn.compact.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: transparent;
 }
 
 .tool-icon-btn.compact small {
@@ -188,15 +192,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--editor-padding);
+  overflow: hidden;
   background:
     radial-gradient(circle at top, rgba(102, 126, 234, 0.08), transparent 35%),
     linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
 }
 
 .edit-card-flip-scene {
-  width: min(100%, 980px);
-  aspect-ratio: 3 / 2;
+  position: relative;
+  width: min(100%, var(--card-max-size), calc(100dvh - 220px));
+  aspect-ratio: 1 / 1;
   perspective: 1800px;
 }
 
@@ -219,9 +225,7 @@
   border-radius: 24px;
   backface-visibility: hidden;
   background: #ffffff;
-  box-shadow:
-    0 24px 60px rgba(15, 23, 42, 0.18),
-    0 10px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-card);
   border: 1px solid rgba(148, 163, 184, 0.18);
   pointer-events: none;
 }
@@ -243,63 +247,10 @@
 }
 
 .edit-card-canvas-face .advanced-editor,
-.edit-card-canvas-face .advanced-stage {
+.edit-card-canvas-face .advanced-stage,
+.edit-card-canvas-face .advanced-stage-canvas {
   width: 100%;
   height: 100%;
-}
-
-@media (max-width: 1024px) {
-  .edit-card-flip-scene {
-    width: min(100%, 860px);
-  }
-}
-
-@media (max-width: 900px) {
-  .edit-card-top {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .edit-card-top-left,
-  .edit-card-top-right {
-    justify-content: space-between;
-    flex-wrap: wrap;
-  }
-}
-
-@media (max-width: 768px) {
-  .edit-card-editor-area {
-    padding: 14px;
-  }
-
-  .edit-card-flip-scene {
-    width: 100%;
-    aspect-ratio: 5 / 4;
-  }
-
-  .tool-icon-btn.compact {
-    min-width: 52px;
-    min-height: 48px;
-  }
-}
-
-@media (max-width: 480px) {
-  .edit-card-flip-scene {
-    aspect-ratio: 1 / 1;
-  }
-
-  .editor-slider {
-    width: 88px;
-  }
-}
-.edit-card-flip-scene {
-  width: min(100%, 980px);
-  aspect-ratio: 1;
-  perspective: 1800px;
-  position: relative;
-}
-.edit-card-flip-scene {
-  position: relative;
 }
 
 .edit-card-face-switcher {
@@ -322,7 +273,33 @@
   font-size: 12px;
 }
 
+@media (max-width: 900px) {
+  .edit-card-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .edit-card-top-left,
+  .edit-card-top-right {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 768px) {
+  .edit-card-editor-area {
+    padding: 12px;
+  }
+
+  .edit-card-flip-scene {
+    width: min(100%, calc(100dvh - 180px));
+  }
+
+  .tool-icon-btn.compact {
+    min-width: 52px;
+    min-height: 48px;
+  }
+
   .edit-card-face-switcher {
     top: 10px;
     right: 10px;
@@ -335,12 +312,9 @@
     font-size: 11px;
   }
 }
-.tools-group {
-  gap: 6px;
-}
 
-.tool-icon-btn.compact small {
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.1;
+@media (max-width: 480px) {
+  .editor-slider {
+    width: 88px;
+  }
 }
