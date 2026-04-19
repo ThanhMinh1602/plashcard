@@ -335,3 +335,12 @@
     font-size: 11px;
   }
 }
+.tools-group {
+  gap: 6px;
+}
+
+.tool-icon-btn.compact small {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+}

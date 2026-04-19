@@ -13,6 +13,7 @@ function AdvancedCanvas(
   {
     initialImage = '',
     tool = 'brush',
+    brushType = 'pen',
     color = '#000000',
     size = 4,
     opacity = 1,
@@ -298,43 +299,133 @@ function AdvancedCanvas(
   };
 
   const drawBrushStroke = (canvas, from, to, erase = false) => {
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+  if (erase) {
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.lineWidth = size;
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
 
-    if (erase) {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = 'rgba(0,0,0,1)';
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,1)';
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  if (brushType === 'pen') {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = opacity;
+    ctx.strokeStyle = color;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  if (brushType === 'pencil') {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = Math.max(1, size * 0.85);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = opacity * 0.45;
+    ctx.strokeStyle = color;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    const dist = Math.hypot(to.x - from.x, to.y - from.y);
+    const dots = Math.max(2, Math.floor(dist * 1.5));
+
+    for (let i = 0; i < dots; i += 1) {
+      const t = i / dots;
+      const x = from.x + (to.x - from.x) * t + (Math.random() - 0.5) * size * 0.6;
+      const y = from.y + (to.y - from.y) * t + (Math.random() - 0.5) * size * 0.6;
 
       ctx.beginPath();
-      ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,1)';
-      ctx.fill();
-    } else {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = opacity;
-      ctx.strokeStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
+      ctx.globalAlpha = opacity * (0.12 + Math.random() * 0.18);
+      ctx.arc(x, y, Math.max(0.6, size * 0.12), 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
     }
 
     ctx.restore();
-  };
+    return;
+  }
+
+  if (brushType === 'marker') {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size * 1.6;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = opacity * 0.28;
+    ctx.strokeStyle = color;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    ctx.restore();
+    return;
+  }
+
+  if (brushType === 'calligraphy') {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = opacity;
+    ctx.fillStyle = color;
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx) + Math.PI / 4;
+    const step = Math.max(1, size * 0.35);
+    const stamps = Math.max(1, Math.ceil(dist / step));
+
+    for (let i = 0; i <= stamps; i += 1) {
+      const t = stamps === 0 ? 0 : i / stamps;
+      const x = from.x + dx * t;
+      const y = from.y + dy * t;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, size * 0.9, Math.max(1, size * 0.28), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+};
 
   const beginInteraction = (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
