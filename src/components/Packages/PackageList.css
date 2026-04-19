@@ -71,18 +71,19 @@
 }
 
 .package-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   padding: 16px 20px 20px;
 }
 
 .package-actions button {
-  flex: 1;
   border: none;
   border-radius: 10px;
   padding: 10px 12px;
   cursor: pointer;
   font-weight: 700;
+  min-height: 42px;
 }
 
 .package-btn-icon {
@@ -99,6 +100,11 @@
 .btn-open {
   background: #111827;
   color: white;
+}
+
+.btn-study {
+  background: #eefaf1;
+  color: #15803d;
 }
 
 .btn-delete {
@@ -129,5 +135,9 @@
 
   .btn-add-package {
     width: 100%;
+  }
+
+  .package-actions {
+    grid-template-columns: 1fr;
   }
 }

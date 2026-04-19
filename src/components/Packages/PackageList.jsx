@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { FiFolder, FiFolderPlus, FiTrash2, FiPackage } from 'react-icons/fi';
-import { BsFolder2Open } from 'react-icons/bs';
-import { deletePackage, getPackages } from '../../services/flashcardService';
+import {
+  FiFolder,
+  FiFolderPlus,
+  FiTrash2,
+  FiPackage,
+} from 'react-icons/fi';
+import { BsFolder2Open, BsPlayCircle } from 'react-icons/bs';
+import {
+  deletePackage,
+  getFlashcards,
+  getPackages,
+} from '../../services/flashcardService';
 import ConfirmModal from '../Common/ConfirmModal';
 import './PackageList.css';
 
@@ -9,12 +18,14 @@ export default function PackageList({
   user,
   onAddPackage,
   onOpenPackage,
+  onStudyPackage,
 }) {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [studyingId, setStudyingId] = useState(null);
 
   useEffect(() => {
     loadPackages();
@@ -53,6 +64,21 @@ export default function PackageList({
       alert('Lỗi xóa gói');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleStudyClick = async (packageItem) => {
+    if (!user) return;
+
+    try {
+      setStudyingId(packageItem.id);
+      const cards = await getFlashcards(user.uid, packageItem.id);
+      onStudyPackage?.(packageItem, cards);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi tải thẻ để học');
+    } finally {
+      setStudyingId(null);
     }
   };
 
@@ -119,6 +145,15 @@ export default function PackageList({
                   >
                     <BsFolder2Open size={16} />
                     <span>Mở</span>
+                  </button>
+
+                  <button
+                    className="btn-study package-btn-icon"
+                    onClick={() => handleStudyClick(item)}
+                    disabled={studyingId === item.id}
+                  >
+                    <BsPlayCircle size={16} />
+                    <span>{studyingId === item.id ? 'Đang tải...' : 'Học'}</span>
                   </button>
 
                   <button
