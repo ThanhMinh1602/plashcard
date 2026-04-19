@@ -1,8 +1,16 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, forwardRef } from 'react';
+import './Canvas.css';
 
-export default function Canvas({ tool, color, size, opacity }) {
+const Canvas = forwardRef(({ tool, color, size, opacity }, ref) => {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
+
+  // Expose canvas ref
+  useEffect(() => {
+    if (ref) {
+      ref.current = canvasRef.current;
+    }
+  }, [ref]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -14,9 +22,42 @@ export default function Canvas({ tool, color, size, opacity }) {
     ctx.lineJoin = 'round';
   }, []);
 
-  const draw = ({ nativeEvent }) => {
+  const getCoordinates = (e) => {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    
+    let clientX, clientY;
+    
+    if (e.touches) {
+      // Touch event
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      // Mouse event
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    const offsetX = clientX - rect.left;
+    const offsetY = clientY - rect.top;
+    
+    return { offsetX, offsetY };
+  };
+
+  const startDrawing = (e) => {
+    e.preventDefault();
+    setIsDrawing(true);
+    const { offsetX, offsetY } = getCoordinates(e);
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.beginPath();
+    ctx.moveTo(offsetX, offsetY);
+  };
+
+  const draw = (e) => {
+    e.preventDefault();
     if (!isDrawing) return;
-    const { offsetX, offsetY } = nativeEvent;
+    
+    const { offsetX, offsetY } = getCoordinates(e);
     const ctx = canvasRef.current.getContext('2d');
 
     ctx.setLineDash([]);
@@ -34,14 +75,26 @@ export default function Canvas({ tool, color, size, opacity }) {
     ctx.stroke();
   };
 
+  const stopDrawing = (e) => {
+    e.preventDefault();
+    setIsDrawing(false);
+  };
+
   return (
     <canvas
       ref={canvasRef}
-      onMouseDown={(e) => { setIsDrawing(true); const ctx = canvasRef.current.getContext('2d'); ctx.beginPath(); ctx.moveTo(e.nativeEvent.offsetX, e.nativeEvent.offsetY); }}
+      onMouseDown={startDrawing}
       onMouseMove={draw}
-      onMouseUp={() => setIsDrawing(false)}
-      onMouseLeave={() => setIsDrawing(false)}
-      style={{ width: '100%', height: '100%', cursor: 'crosshair', backgroundColor: '#FEF9E7' }}
+      onMouseUp={stopDrawing}
+      onMouseLeave={stopDrawing}
+      onTouchStart={startDrawing}
+      onTouchMove={draw}
+      onTouchEnd={stopDrawing}
+      onTouchCancel={stopDrawing}
+      className="canvas"
     />
   );
-}
+});
+
+Canvas.displayName = 'Canvas';
+export default Canvas;

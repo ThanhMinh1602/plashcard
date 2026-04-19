@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { auth } from './services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import Flashcard from './components/Flashcard/Flashcard';
-import Canvas from './components/DrawingBoard/Canvas';
-import Toolbar from './components/DrawingBoard/Toolbar';
+import CardsList from './components/CardsList/CardsList';
+import EditCard from './components/EditCard/EditCard';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import ForgotPassword from './components/Auth/ForgotPassword';
+import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
-  const [authMode, setAuthMode] = useState('login'); // 'login', 'register', 'forgot'
+  const [authMode, setAuthMode] = useState('login');
+  const [currentPage, setCurrentPage] = useState('list'); // 'list' or 'edit'
+  const [editingCard, setEditingCard] = useState(null);
 
   // Kiểm tra trạng thái đăng nhập
   useEffect(() => {
@@ -20,12 +22,25 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Các state cho Flashcard
-  const [isFlipped, setIsFlipped] = useState(false);
-  const [tool, setTool] = useState('pen');
-  const [color, setColor] = useState('#000000');
-  const [size, setSize] = useState(5);
-  const [opacity, setOpacity] = useState(1);
+  const handleAddCard = () => {
+    setEditingCard(null);
+    setCurrentPage('edit');
+  };
+
+  const handleEditCard = (card) => {
+    setEditingCard(card);
+    setCurrentPage('edit');
+  };
+
+  const handleBackToList = () => {
+    setCurrentPage('list');
+    setEditingCard(null);
+  };
+
+  const handleCardSaved = () => {
+    // Reload list when card is saved
+    setCurrentPage('list');
+  };
 
   if (!user) {
     if (authMode === 'register') return <Register onSwitch={() => setAuthMode('login')} />;
@@ -34,27 +49,36 @@ function App() {
   }
 
   return (
-    <div style={{ maxWidth: '600px', margin: 'auto', padding: '20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span>Chào, {user.email}</span>
-        <button onClick={() => signOut(auth)}>Đăng xuất</button>
-      </div>
+    <div className="app-container">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="header-left">
+            <h1 className="app-title">✏️ Flashcard</h1>
+            <p className="header-subtitle">Vẽ và học từ vựng</p>
+          </div>
+          <div className="header-right">
+            <span className="user-greeting">Chào, <strong>{user.email}</strong></span>
+            <button onClick={() => signOut(auth)} className="logout-btn">Đăng xuất</button>
+          </div>
+        </div>
+      </header>
 
-      <h1>Flashcard App</h1>
-      <button onClick={() => setIsFlipped(!isFlipped)} style={{ marginBottom: '10px', padding: '10px' }}>🔃 Lật thẻ</button>
-      
-      <Flashcard 
-        isFlipped={isFlipped} 
-        front={<Canvas tool={tool} color={color} size={size} opacity={opacity} />} 
-        back={<Canvas tool={tool} color={color} size={size} opacity={opacity} />} 
-      />
-
-      <Toolbar 
-        activeTool={tool} setActiveTool={setTool}
-        color={color} setColor={setColor}
-        size={size} setSize={setSize}
-        opacity={opacity} setOpacity={setOpacity}
-      />
+      <main className="app-main">
+        {currentPage === 'list' ? (
+          <CardsList
+            user={user}
+            onAddCard={handleAddCard}
+            onEditCard={handleEditCard}
+          />
+        ) : (
+          <EditCard
+            user={user}
+            card={editingCard}
+            onBack={handleBackToList}
+            onCardSaved={handleCardSaved}
+          />
+        )}
+      </main>
     </div>
   );
 }

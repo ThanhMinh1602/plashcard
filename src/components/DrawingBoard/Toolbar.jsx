@@ -1,21 +1,69 @@
 import React from 'react';
 import { COLORS, TOOLS } from '../../utils/constants';
+import './Toolbar.css';
 
 export default function Toolbar({ activeTool, setActiveTool, color, setColor, size, setSize, opacity, setOpacity }) {
   return (
-    <div style={{ background: '#f8f9fa', padding: '15px', borderRadius: '15px', marginTop: '10px' }}>
-      <div style={{ display: 'flex', gap: '5px', marginBottom: '10px', flexWrap: 'wrap' }}>
-        {TOOLS.map(t => (
-          <button key={t.id} onClick={() => setActiveTool(t.id)} style={{ background: activeTool === t.id ? '#007AFF' : '#fff', border: '1px solid #ddd', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}>{t.label}</button>
-        ))}
+    <div className="toolbar">
+      <div className="toolbar-section">
+        <label className="toolbar-label">Công cụ</label>
+        <div className="tools-grid">
+          {TOOLS.map(t => (
+            <button 
+              key={t.id} 
+              onClick={() => setActiveTool(t.id)} 
+              className={`tool-btn ${activeTool === t.id ? 'active' : ''}`}
+              title={t.label}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: '5px', marginBottom: '10px' }}>
-        {COLORS.map(c => (
-          <div key={c} onClick={() => setColor(c)} style={{ width: 25, height: 25, borderRadius: '50%', background: c, cursor: 'pointer', border: color === c ? '2px solid #000' : 'none' }} />
-        ))}
+
+      <div className="toolbar-section">
+        <label className="toolbar-label">Màu sắc</label>
+        <div className="colors-grid">
+          {COLORS.map(c => (
+            <div 
+              key={c} 
+              onClick={() => setColor(c)} 
+              className={`color-dot ${color === c ? 'active' : ''}`}
+              style={{ backgroundColor: c }}
+              title={c}
+            />
+          ))}
+        </div>
       </div>
-      <input type="range" min="1" max="20" value={size} onChange={(e) => setSize(e.target.value)} /> Kích cỡ
-      <input type="range" min="0.1" max="1" step="0.1" value={opacity} onChange={(e) => setOpacity(e.target.value)} /> Độ đậm
+
+      <div className="toolbar-section">
+        <div className="slider-group">
+          <label className="toolbar-label">Kích cỡ: <span className="value">{Math.round(size)}</span></label>
+          <input 
+            type="range" 
+            min="1" 
+            max="20" 
+            value={size} 
+            onChange={(e) => setSize(e.target.value)}
+            className="slider"
+          />
+        </div>
+      </div>
+
+      <div className="toolbar-section">
+        <div className="slider-group">
+          <label className="toolbar-label">Độ đậm: <span className="value">{Math.round(opacity * 100)}%</span></label>
+          <input 
+            type="range" 
+            min="0.1" 
+            max="1" 
+            step="0.1" 
+            value={opacity} 
+            onChange={(e) => setOpacity(e.target.value)}
+            className="slider"
+          />
+        </div>
+      </div>
     </div>
   );
 }

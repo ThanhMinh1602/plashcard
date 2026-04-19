@@ -3,12 +3,11 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_ID",
-  appId: "YOUR_APP_ID"
+ apiKey: "AIzaSyD0AOm4ELi935hCyZUus7d2qd4PNkAZstI",
+  authDomain: "flash-card-72702.firebaseapp.com",
+  projectId: "flash-card-72702",
+  storageBucket: "flash-card-72702.firebasestorage.app",
+  messagingSenderId: "459354106645",
 };
 
 const app = initializeApp(firebaseConfig);

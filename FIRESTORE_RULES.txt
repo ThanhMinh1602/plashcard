@@ -1,0 +1,25 @@
+// ========== FIRESTORE SECURITY RULES ==========
+// Hãy thêm rules này vào Firestore Console
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cho phép users đọc/viết data của chính mình
+    match /users/{userId} {
+      allow read, write: if request.auth.uid == userId;
+      
+      // Cho phép users tạo, đọc, cập nhật, xóa cards của chính mình
+      match /cards/{cardId=**} {
+        allow read, create, update, delete: if request.auth.uid == userId;
+      }
+    }
+  }
+}
+
+// ========== HƯỚNG DẪN ==========
+// 1. Vào Firebase Console: https://console.firebase.google.com
+// 2. Chọn project "flash-card-72702"
+// 3. Vào mục "Firestore Database"
+// 4. Chọn tab "Rules"
+// 5. Xóa rules cũ và paste rules ở trên
+// 6. Nhấn "Publish"
