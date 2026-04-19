@@ -20,7 +20,7 @@ const TOOL_LIST = [
 ];
 
 const makeId = () =>
-  (typeof crypto !== 'undefined' && crypto.randomUUID)
+  typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -30,6 +30,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   const containerRef = useRef(null);
   const viewCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
+  const activePointerIdRef = useRef(null);
 
   const layerStoreRef = useRef(new Map());
   const historyRef = useRef([]);
@@ -58,11 +59,59 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
   const getLayerCanvas = (layerId) => layerStoreRef.current.get(layerId) || null;
 
+  const getClientPoint = (e) => {
+    const source =
+      e?.nativeEvent?.changedTouches?.[0] ||
+      e?.changedTouches?.[0] ||
+      e?.nativeEvent?.touches?.[0] ||
+      e?.touches?.[0] ||
+      e;
+
+    return {
+      clientX: source?.clientX ?? 0,
+      clientY: source?.clientY ?? 0,
+    };
+  };
+
+  const toDocPoint = (e) => {
+    const canvas = viewCanvasRef.current;
+    if (!canvas) {
+      return { x: 0, y: 0, clientX: 0, clientY: 0 };
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const { clientX, clientY } = getClientPoint(e);
+
+    const x = (clientX - rect.left - pan.x) / zoom;
+    const y = (clientY - rect.top - pan.y) / zoom;
+
+    return {
+      x: clamp(x, 0, docSizeRef.current.width),
+      y: clamp(y, 0, docSizeRef.current.height),
+      clientX,
+      clientY,
+    };
+  };
+
+  const releasePointer = () => {
+    const pointerId = activePointerIdRef.current;
+
+    if (pointerId != null) {
+      try {
+        viewCanvasRef.current?.releasePointerCapture?.(pointerId);
+      } catch {
+        // ignore
+      }
+    }
+
+    activePointerIdRef.current = null;
+  };
+
   const createOffscreenCanvas = (width, height) => {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.clearRect(0, 0, width, height);
     return canvas;
   };
@@ -72,6 +121,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     const id = makeId();
     const canvas = createOffscreenCanvas(width, height);
     layerStoreRef.current.set(id, canvas);
+
     return {
       id,
       name,
@@ -82,14 +132,15 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
   const loadImageToCanvas = (canvas, src, mode = 'stretch') =>
     new Promise((resolve) => {
-      if (!src) {
+      if (!src || !canvas) {
         resolve();
         return;
       }
 
       const img = new Image();
+
       img.onload = () => {
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (mode === 'contain') {
@@ -108,6 +159,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
         resolve();
       };
+
       img.onerror = () => resolve();
       img.src = src;
     });
@@ -123,9 +175,11 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   const commitHistory = (currentLayers = layers, currentActive = activeLayerId) => {
     const snapshot = buildSnapshot(currentLayers, currentActive);
     const nextHistory = historyRef.current.slice(0, historyStepRef.current + 1);
+
     nextHistory.push(snapshot);
     historyRef.current = nextHistory;
     historyStepRef.current = nextHistory.length - 1;
+
     setHistoryLength(nextHistory.length);
     setHistoryStep(historyStepRef.current);
   };
@@ -136,7 +190,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     exportCanvas.width = width;
     exportCanvas.height = height;
 
-    const ctx = exportCanvas.getContext('2d');
+    const ctx = exportCanvas.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, width, height);
 
@@ -144,6 +198,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
       if (!layer.visible) return;
       const layerCanvas = getLayerCanvas(layer.id);
       if (!layerCanvas) return;
+
       ctx.save();
       ctx.globalAlpha = layer.opacity;
       ctx.drawImage(layerCanvas, 0, 0);
@@ -158,6 +213,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   const fitToView = () => {
     const { width: docWidth, height: docHeight } = docSizeRef.current;
     const { width: displayWidth, height: displayHeight } = displaySize;
+
     if (!docWidth || !docHeight || !displayWidth || !displayHeight) return;
 
     const padding = 24;
@@ -257,25 +313,9 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     ctx.restore();
   };
 
-  const toDocPoint = (e) => {
-    const canvas = viewCanvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-
-    const x = (clientX - rect.left - pan.x) / zoom;
-    const y = (clientY - rect.top - pan.y) / zoom;
-
-    return {
-      x: clamp(x, 0, docSizeRef.current.width),
-      y: clamp(y, 0, docSizeRef.current.height),
-      clientX,
-      clientY,
-    };
-  };
-
   const drawBrushStroke = (layerCanvas, from, to, erase = false) => {
-    const ctx = layerCanvas.getContext('2d');
+    const ctx = layerCanvas.getContext('2d', { willReadFrequently: true });
+
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -315,6 +355,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   const hexToRgb = (hex) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     if (!result) return { r: 0, g: 0, b: 0 };
+
     return {
       r: parseInt(result[1], 16),
       g: parseInt(result[2], 16),
@@ -323,15 +364,13 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   };
 
   const rgbToHex = (r, g, b) =>
-    `#${[r, g, b]
-      .map((v) => v.toString(16).padStart(2, '0'))
-      .join('')}`;
+    `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 
   const colorsMatch = (a, b, tolerance = 10) =>
     a.every((value, index) => Math.abs(value - b[index]) <= tolerance);
 
   const fillLayer = (layerCanvas, x, y) => {
-    const ctx = layerCanvas.getContext('2d');
+    const ctx = layerCanvas.getContext('2d', { willReadFrequently: true });
     const imageData = ctx.getImageData(0, 0, layerCanvas.width, layerCanvas.height);
     const { data, width, height } = imageData;
 
@@ -345,7 +384,12 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
     const target = getPixel(px, py);
     const nextColor = hexToRgb(color);
-    const replacement = [nextColor.r, nextColor.g, nextColor.b, Math.round(opacity * 255)];
+    const replacement = [
+      nextColor.r,
+      nextColor.g,
+      nextColor.b,
+      Math.round(opacity * 255),
+    ];
 
     if (colorsMatch(target, replacement, 0)) return;
 
@@ -361,6 +405,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
       }
 
       visited.add(key);
+
       const current = getPixel(cx, cy);
       if (!colorsMatch(current, target)) continue;
 
@@ -386,7 +431,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     const text = window.prompt('Nhập chữ');
     if (!text) return;
 
-    const ctx = layerCanvas.getContext('2d');
+    const ctx = layerCanvas.getContext('2d', { willReadFrequently: true });
     ctx.save();
     ctx.globalAlpha = opacity;
     ctx.fillStyle = color;
@@ -401,22 +446,28 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
   const applyEyedropper = (point) => {
     const composite = buildCompositeCanvas();
-    const ctx = composite.getContext('2d');
+    const ctx = composite.getContext('2d', { willReadFrequently: true });
     const pixel = ctx.getImageData(
       clamp(Math.floor(point.x), 0, composite.width - 1),
       clamp(Math.floor(point.y), 0, composite.height - 1),
       1,
       1
     ).data;
+
     setColor(rgbToHex(pixel[0], pixel[1], pixel[2]));
   };
 
   const beginInteraction = (e) => {
-    e.preventDefault();
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (typeof e.isPrimary === 'boolean' && !e.isPrimary) return;
 
+    e.preventDefault();
     const point = toDocPoint(e);
 
     if (tool === 'hand') {
+      activePointerIdRef.current = e.pointerId ?? null;
+      viewCanvasRef.current?.setPointerCapture?.(e.pointerId);
+
       interactionRef.current = {
         mode: 'pan',
         startClientX: point.clientX,
@@ -448,6 +499,9 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
       return;
     }
 
+    activePointerIdRef.current = e.pointerId ?? null;
+    viewCanvasRef.current?.setPointerCapture?.(e.pointerId);
+
     interactionRef.current = {
       mode: 'draw',
       tool,
@@ -463,13 +517,22 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
   const moveInteraction = (e) => {
     if (!interactionRef.current) return;
-    e.preventDefault();
 
+    if (
+      activePointerIdRef.current != null &&
+      e.pointerId != null &&
+      e.pointerId !== activePointerIdRef.current
+    ) {
+      return;
+    }
+
+    e.preventDefault();
     const current = toDocPoint(e);
 
     if (interactionRef.current.mode === 'pan') {
       const dx = current.clientX - interactionRef.current.startClientX;
       const dy = current.clientY - interactionRef.current.startClientY;
+
       setPan({
         x: interactionRef.current.startPan.x + dx,
         y: interactionRef.current.startPan.y + dy,
@@ -489,6 +552,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
         current,
         currentTool === 'eraser'
       );
+
       interactionRef.current.last = { x: current.x, y: current.y };
       renderComposite();
       return;
@@ -505,24 +569,38 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   };
 
   const endInteraction = (e) => {
-    if (!interactionRef.current) return;
-    e.preventDefault();
+    if (
+      activePointerIdRef.current != null &&
+      e.pointerId != null &&
+      e.pointerId !== activePointerIdRef.current
+    ) {
+      return;
+    }
 
+    if (!interactionRef.current) {
+      releasePointer();
+      return;
+    }
+
+    e.preventDefault();
     const current = toDocPoint(e);
 
     if (interactionRef.current.mode === 'pan') {
       interactionRef.current = null;
+      releasePointer();
       return;
     }
 
     const currentTool = interactionRef.current.tool;
     const layerCanvas = getLayerCanvas(activeLayerId);
+
     if (!layerCanvas) {
       interactionRef.current = null;
+      releasePointer();
       return;
     }
 
-    const ctx = layerCanvas.getContext('2d');
+    const ctx = layerCanvas.getContext('2d', { willReadFrequently: true });
     ctx.save();
     ctx.globalAlpha = opacity;
     ctx.strokeStyle = color;
@@ -548,6 +626,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
         Math.pow(current.x - interactionRef.current.start.x, 2) +
           Math.pow(current.y - interactionRef.current.start.y, 2)
       );
+
       ctx.beginPath();
       ctx.arc(
         interactionRef.current.start.x,
@@ -562,18 +641,22 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     ctx.restore();
 
     interactionRef.current = null;
+    releasePointer();
     renderComposite();
     commitHistory();
   };
 
   const restoreSnapshot = async (snapshot) => {
     const nextStore = new Map();
+
     const nextLayers = snapshot.layers.map((layer) => {
       const canvas = createOffscreenCanvas(
         docSizeRef.current.width,
         docSizeRef.current.height
       );
+
       nextStore.set(layer.id, canvas);
+
       return {
         id: layer.id,
         name: layer.name,
@@ -590,17 +673,20 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
     layerStoreRef.current = nextStore;
     setLayers(nextLayers);
-    setActiveLayerId(
+
+    const nextActive =
       snapshot.activeLayerId && nextStore.has(snapshot.activeLayerId)
         ? snapshot.activeLayerId
-        : nextLayers[nextLayers.length - 1]?.id || null
-    );
+        : nextLayers[nextLayers.length - 1]?.id || null;
+
+    setActiveLayerId(nextActive);
 
     requestAnimationFrame(() => renderComposite(nextLayers));
   };
 
   const undo = async () => {
     if (historyStepRef.current <= 0) return;
+
     historyStepRef.current -= 1;
     setHistoryStep(historyStepRef.current);
     await restoreSnapshot(historyRef.current[historyStepRef.current]);
@@ -608,6 +694,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
   const redo = async () => {
     if (historyStepRef.current >= historyRef.current.length - 1) return;
+
     historyStepRef.current += 1;
     setHistoryStep(historyStepRef.current);
     await restoreSnapshot(historyRef.current[historyStepRef.current]);
@@ -616,20 +703,22 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
   const addLayer = () => {
     const nextLayer = createLayer(`Layer ${layers.length + 1}`);
     const nextLayers = [...layers, nextLayer];
+
     setLayers(nextLayers);
     setActiveLayerId(nextLayer.id);
     renderComposite(nextLayers);
     commitHistory(nextLayers, nextLayer.id);
   };
 
-  const duplicateLayer = async (layerId) => {
+  const duplicateLayer = (layerId) => {
     const sourceLayer = getLayerCanvas(layerId);
     const sourceMeta = layers.find((layer) => layer.id === layerId);
+
     if (!sourceLayer || !sourceMeta) return;
 
     const duplicate = createLayer(`${sourceMeta.name} copy`);
     const duplicateCanvas = getLayerCanvas(duplicate.id);
-    const ctx = duplicateCanvas.getContext('2d');
+    const ctx = duplicateCanvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(sourceLayer, 0, 0);
 
     const index = layers.findIndex((layer) => layer.id === layerId);
@@ -649,6 +738,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     }
 
     layerStoreRef.current.delete(layerId);
+
     const nextLayers = layers.filter((layer) => layer.id !== layerId);
     const nextActive = nextLayers[nextLayers.length - 1]?.id || null;
 
@@ -678,6 +768,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     const nextLayers = layers.map((layer) =>
       layer.id === layerId ? { ...layer, ...patch } : layer
     );
+
     setLayers(nextLayers);
     renderComposite(nextLayers);
     commitHistory(nextLayers, activeLayerId);
@@ -687,8 +778,9 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     const canvas = getLayerCanvas(activeLayerId);
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     renderComposite();
     commitHistory();
   };
@@ -699,6 +791,7 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
     const url = URL.createObjectURL(file);
     const canvas = getLayerCanvas(activeLayerId);
+
     await loadImageToCanvas(canvas, url, 'contain');
     URL.revokeObjectURL(url);
 
@@ -716,7 +809,10 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
   const handleWheel = (e) => {
     e.preventDefault();
+
     const canvas = viewCanvasRef.current;
+    if (!canvas) return;
+
     const rect = canvas.getBoundingClientRect();
 
     const cursorX = e.clientX - rect.left;
@@ -739,9 +835,14 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
 
     const updateSize = () => {
       const rect = element.getBoundingClientRect();
-      setDisplaySize({
-        width: Math.max(1, Math.floor(rect.width)),
-        height: Math.max(1, Math.floor(rect.height)),
+      const width = Math.floor(rect.width);
+      const height = Math.floor(rect.height);
+
+      if (width <= 0 || height <= 0) return;
+
+      setDisplaySize((prev) => {
+        if (prev.width === width && prev.height === height) return prev;
+        return { width, height };
       });
     };
 
@@ -792,13 +893,22 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
     renderComposite();
   }, [layers, zoom, pan, displaySize]);
 
+  useEffect(() => {
+    return () => releasePointer();
+  }, []);
+
   const layerListForPanel = [...layers].reverse();
 
   return (
     <div className="advanced-editor">
       <div className="advanced-topbar">
         <div className="advanced-topbar-group">
-          <button type="button" className="editor-btn" onClick={undo} disabled={historyStep === 0}>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={undo}
+            disabled={historyStep === 0}
+          >
             ↶ Undo
           </button>
           <button
@@ -847,7 +957,11 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
         </div>
 
         <div className="advanced-topbar-group">
-          <button type="button" className="editor-btn" onClick={() => fileInputRef.current?.click()}>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => fileInputRef.current?.click()}
+          >
             📂 Import
           </button>
           <button type="button" className="editor-btn" onClick={handleDownload}>
@@ -859,13 +973,21 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
         </div>
 
         <div className="advanced-topbar-group">
-          <button type="button" className="editor-btn" onClick={() => setZoom((z) => clamp(z * 0.9, 0.2, 5))}>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => setZoom((z) => clamp(z * 0.9, 0.2, 5))}
+          >
             −
           </button>
           <button type="button" className="editor-btn" onClick={fitToView}>
             Fit
           </button>
-          <button type="button" className="editor-btn" onClick={() => setZoom((z) => clamp(z * 1.1, 0.2, 5))}>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => setZoom((z) => clamp(z * 1.1, 0.2, 5))}
+          >
             +
           </button>
           <span className="zoom-value">{Math.round(zoom * 100)}%</span>
@@ -900,14 +1022,10 @@ function AdvancedCanvas({ initialImage = '' }, ref) {
           <canvas
             ref={viewCanvasRef}
             className="advanced-stage-canvas"
-            onMouseDown={beginInteraction}
-            onMouseMove={moveInteraction}
-            onMouseUp={endInteraction}
-            onMouseLeave={endInteraction}
-            onTouchStart={beginInteraction}
-            onTouchMove={moveInteraction}
-            onTouchEnd={endInteraction}
-            onTouchCancel={endInteraction}
+            onPointerDown={beginInteraction}
+            onPointerMove={moveInteraction}
+            onPointerUp={endInteraction}
+            onPointerCancel={endInteraction}
             onWheel={handleWheel}
           />
         </div>
