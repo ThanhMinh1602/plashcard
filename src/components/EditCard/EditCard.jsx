@@ -31,7 +31,13 @@ const DEFAULT_STATUS = {
     canRedo: false,
 };
 
-export default function EditCard({ user, card, onBack, onCardSaved }) {
+export default function EditCard({
+    user,
+    packageItem,
+    card,
+    onBack,
+    onCardSaved,
+}) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [isFlipped, setIsFlipped] = useState(false);
@@ -49,6 +55,7 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
     const activeRef = isFlipped ? backRef : frontRef;
     const activeToolbox = isFlipped ? backToolbox : frontToolbox;
     const activeStatus = isFlipped ? backStatus : frontStatus;
+    const isBrushTool = activeToolbox.tool === 'brush';
 
     const setActiveToolbox = (patch) => {
         if (isFlipped) {
@@ -82,7 +89,10 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
     };
 
     const handleSave = async () => {
-        if (!user) return;
+        if (!user || !packageItem?.id || !packageItem?.name?.trim()) {
+            setError('Bạn cần nhập tên gói trước khi lưu card');
+            return;
+        }
 
         setLoading(true);
         setError('');
@@ -92,9 +102,9 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
             const back = backRef.current?.toDataURL?.() || '';
 
             if (card?.id) {
-                await updateFlashcard(user.uid, card.id, front, back);
+                await updateFlashcard(user.uid, packageItem.id, card.id, front, back);
             } else {
-                await addFlashcard(user.uid, front, back);
+                await addFlashcard(user.uid, packageItem.id, front, back);
             }
 
             onCardSaved?.();
@@ -106,7 +116,7 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
             setLoading(false);
         }
     };
-const isBrushTool = activeToolbox.tool === 'brush';
+
     return (
         <div className="edit-card-page">
             <div className="edit-card-top">
@@ -114,7 +124,10 @@ const isBrushTool = activeToolbox.tool === 'brush';
                     <button className="edit-page-btn" onClick={onBack} disabled={loading}>
                         ← Quay lại
                     </button>
-                    <h2>{card?.id ? 'Sửa Flashcard' : 'Tạo Flashcard'}</h2>
+                    <h2>
+                        {card?.id ? 'Sửa Flashcard' : 'Tạo Flashcard'}
+                        {packageItem?.name ? ` • ${packageItem.name}` : ''}
+                    </h2>
                 </div>
 
                 <div className="edit-card-top-right">
@@ -143,42 +156,42 @@ const isBrushTool = activeToolbox.tool === 'brush';
                         ↷ Redo
                     </button>
                 </div>
+
                 <div
-    className={`advanced-topbar-group tools-group brush-type-group ${isBrushTool ? 'open' : 'closed'}`}
-    aria-hidden={!isBrushTool}
->
-    {BRUSH_TYPES.map((item, index) => (
-        <button
-            key={item.id}
-            type="button"
-            title={item.label}
-            className={`tool-icon-btn compact brush-type-btn ${activeToolbox.brushType === item.id ? 'active' : ''}`}
-            onClick={() => setActiveToolbox({ brushType: item.id })}
-            style={{ '--item-index': index }}
-            disabled={!isBrushTool}
-            tabIndex={isBrushTool ? 0 : -1}
-        >
-            <span>{item.icon}</span>
-            <small>{item.label}</small>
-        </button>
-    ))}
-</div>
+                    className={`advanced-topbar-group tools-group brush-type-group ${isBrushTool ? 'open' : 'closed'}`}
+                    aria-hidden={!isBrushTool}
+                >
+                    {BRUSH_TYPES.map((item, index) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            title={item.label}
+                            className={`tool-icon-btn compact brush-type-btn ${activeToolbox.brushType === item.id ? 'active' : ''
+                                }`}
+                            onClick={() => setActiveToolbox({ brushType: item.id })}
+                            style={{ '--item-index': index }}
+                            disabled={!isBrushTool}
+                            tabIndex={isBrushTool ? 0 : -1}
+                        >
+                            <span>{item.icon}</span>
+                            <small>{item.label}</small>
+                        </button>
+                    ))}
+                </div>
+
                 <div className="advanced-topbar-group tools-group">
                     {TOOL_LIST.map((item) => (
                         <button
                             key={item.id}
                             type="button"
                             title={item.label}
-                            className={`tool-icon-btn compact ${activeToolbox.tool === item.id ? 'active' : ''
-                                }`}
+                            className={`tool-icon-btn compact ${activeToolbox.tool === item.id ? 'active' : ''}`}
                             onClick={() => setActiveToolbox({ tool: item.id })}
                         >
                             <span>{item.icon}</span>
                             <small>{item.label}</small>
                         </button>
-                    ))
-
-                    }
+                    ))}
                 </div>
 
                 <div className="advanced-topbar-group">
