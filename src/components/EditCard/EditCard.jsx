@@ -9,7 +9,6 @@ const TOOL_LIST = [
   { id: 'line', icon: '📏', label: 'Line' },
   { id: 'rectangle', icon: '▭', label: 'Rectangle' },
   { id: 'circle', icon: '⭕', label: 'Circle' },
-
 ];
 
 const DEFAULT_TOOLBOX = {
@@ -22,7 +21,6 @@ const DEFAULT_TOOLBOX = {
 const DEFAULT_STATUS = {
   canUndo: false,
   canRedo: false,
-  zoom: 1,
 };
 
 export default function EditCard({ user, card, onBack, onCardSaved }) {
@@ -53,15 +51,6 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
   };
 
   const handleStatusChange = (face) => (status) => {
-    if (status?.pickedColor) {
-      if (face === 'front') {
-        setFrontToolbox((prev) => ({ ...prev, color: status.pickedColor }));
-      } else {
-        setBackToolbox((prev) => ({ ...prev, color: status.pickedColor }));
-      }
-      return;
-    }
-
     if (face === 'front') {
       setFrontStatus((prev) => ({ ...prev, ...status }));
     } else {
@@ -121,20 +110,6 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
         </div>
 
         <div className="edit-card-top-right">
-          <button
-            className={`face-btn ${!isFlipped ? 'active' : ''}`}
-            onClick={() => setIsFlipped(false)}
-            type="button"
-          >
-            Mặt trước
-          </button>
-          <button
-            className={`face-btn ${isFlipped ? 'active' : ''}`}
-            onClick={() => setIsFlipped(true)}
-            type="button"
-          >
-            Mặt sau
-          </button>
           <button className="edit-page-btn primary" onClick={handleSave} disabled={loading}>
             {loading ? 'Đang lưu...' : '💾 Lưu thẻ'}
           </button>
@@ -248,6 +223,23 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
 
       <div className="edit-card-editor-area">
         <div className="edit-card-flip-scene">
+          <div className="edit-card-face-switcher">
+            <button
+              className={`face-btn ${!isFlipped ? 'active' : ''}`}
+              onClick={() => setIsFlipped(false)}
+              type="button"
+            >
+              Mặt trước
+            </button>
+            <button
+              className={`face-btn ${isFlipped ? 'active' : ''}`}
+              onClick={() => setIsFlipped(true)}
+              type="button"
+            >
+              Mặt sau
+            </button>
+          </div>
+
           <div className={`edit-card-flip-inner ${isFlipped ? 'flipped' : ''}`}>
             <div className="edit-card-canvas-face front">
               <AdvancedCanvas

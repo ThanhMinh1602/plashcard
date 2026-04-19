@@ -298,3 +298,40 @@
   perspective: 1800px;
   position: relative;
 }
+.edit-card-flip-scene {
+  position: relative;
+}
+
+.edit-card-face-switcher {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.edit-card-face-switcher .face-btn {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .edit-card-face-switcher {
+    top: 10px;
+    right: 10px;
+    gap: 6px;
+    padding: 5px;
+  }
+
+  .edit-card-face-switcher .face-btn {
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+}
