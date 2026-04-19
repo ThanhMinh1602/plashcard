@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { FiArrowLeft } from 'react-icons/fi';
 import {
   getFlashcards,
   addFlashcard,
@@ -62,6 +63,12 @@ export default function CardsList({
   const [packageDescription, setPackageDescription] = useState(
     packageItem?.description || ''
   );
+  const [debouncedPackageName, setDebouncedPackageName] = useState(
+    packageItem?.name || ''
+  );
+  const [debouncedPackageDescription, setDebouncedPackageDescription] = useState(
+    packageItem?.description || ''
+  );
 
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [packageTouched, setPackageTouched] = useState(false);
@@ -74,8 +81,16 @@ export default function CardsList({
   const nameInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const initialSyncDoneRef = useRef(false);
-  const autoSaveTimerRef = useRef(null);
+  const debounceTimerRef = useRef(null);
   const canvasRefs = useRef({});
+  const pairCardRefs = useRef({});
+  const pendingScrollToCardRef = useRef(null);
+  const lastSavedPackageRef = useRef({
+    name: packageItem?.name || '',
+    description: packageItem?.description || '',
+  });
+  const packageItemRef = useRef(packageItem);
+  const onPackageUpdatedRef = useRef(onPackageUpdated);
 
   const canAddCard = packageName.trim().length > 0;
   const activeCanvasRef = activeCanvasKey ? canvasRefs.current[activeCanvasKey] : null;
@@ -83,8 +98,18 @@ export default function CardsList({
   const isBrushTool = toolbox.tool === 'brush';
 
   useEffect(() => {
+    packageItemRef.current = packageItem;
+  }, [packageItem]);
+
+  useEffect(() => {
+    onPackageUpdatedRef.current = onPackageUpdated;
+  }, [onPackageUpdated]);
+
+  useEffect(() => {
     setPackageName(packageItem?.name || '');
     setPackageDescription(packageItem?.description || '');
+    setDebouncedPackageName(packageItem?.name || '');
+    setDebouncedPackageDescription(packageItem?.description || '');
     setNameError('');
     setError('');
     setSaveMessage('');
@@ -92,7 +117,18 @@ export default function CardsList({
     setCards([]);
     setActiveCanvasKey(null);
     setCanvasStatusMap({});
+    pairCardRefs.current = {};
+    pendingScrollToCardRef.current = null;
+    lastSavedPackageRef.current = {
+      name: packageItem?.name || '',
+      description: packageItem?.description || '',
+    };
     initialSyncDoneRef.current = false;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
 
     const raf = requestAnimationFrame(() => {
       initialSyncDoneRef.current = true;
@@ -106,48 +142,90 @@ export default function CardsList({
   }, [user, packageItem?.id]);
 
   useEffect(() => {
+    if (!packageTouched) return;
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedPackageName(packageName);
+      setDebouncedPackageDescription(packageDescription);
+    }, 700);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [packageName, packageDescription, packageTouched]);
+
+  useEffect(() => {
     if (!user || !packageItem?.id) return;
     if (!initialSyncDoneRef.current) return;
     if (!packageTouched) return;
 
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
+    const lastSaved = lastSavedPackageRef.current;
+    if (
+      debouncedPackageName === lastSaved.name &&
+      debouncedPackageDescription === lastSaved.description
+    ) {
+      return;
     }
 
-    autoSaveTimerRef.current = setTimeout(async () => {
+    let cancelled = false;
+
+    const autoSavePackage = async () => {
       try {
         setIsAutoSaving(true);
-        await updatePackage(user.uid, packageItem.id, packageName, packageDescription);
+        setError('');
 
-        onPackageUpdated?.({
-          ...packageItem,
-          name: packageName,
-          description: packageDescription,
+        await updatePackage(
+          user.uid,
+          packageItem.id,
+          debouncedPackageName,
+          debouncedPackageDescription
+        );
+
+        if (cancelled) return;
+
+        lastSavedPackageRef.current = {
+          name: debouncedPackageName,
+          description: debouncedPackageDescription,
+        };
+
+        onPackageUpdatedRef.current?.({
+          ...packageItemRef.current,
+          name: debouncedPackageName,
+          description: debouncedPackageDescription,
         });
 
-        if (packageName.trim()) {
+        if (debouncedPackageName.trim()) {
           setNameError('');
         }
       } catch (err) {
         console.error(err);
-        setError('Lỗi tự động lưu thông tin gói');
+        if (!cancelled) {
+          setError('Lỗi tự động lưu tên gói');
+        }
       } finally {
-        setIsAutoSaving(false);
-      }
-    }, 700);
-
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
+        if (!cancelled) {
+          setIsAutoSaving(false);
+        }
       }
     };
+
+    autoSavePackage();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
-    packageName,
-    packageDescription,
+    debouncedPackageName,
+    debouncedPackageDescription,
     packageTouched,
     user?.uid,
     packageItem?.id,
-    onPackageUpdated,
   ]);
 
   useEffect(() => {
@@ -166,6 +244,25 @@ export default function CardsList({
       setActiveCanvasKey(`${cards[0].localId}-front`);
     }
   }, [cards, activeCanvasKey]);
+
+  useEffect(() => {
+    const targetLocalId = pendingScrollToCardRef.current;
+    if (!targetLocalId) return;
+
+    const targetNode = pairCardRefs.current[targetLocalId];
+    if (!targetNode) return;
+
+    const raf = requestAnimationFrame(() => {
+      targetNode.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
+
+    pendingScrollToCardRef.current = null;
+
+    return () => cancelAnimationFrame(raf);
+  }, [cards]);
 
   const loadCards = async () => {
     if (!user || !packageItem?.id) return;
@@ -199,6 +296,14 @@ export default function CardsList({
     }
   };
 
+  const setPairCardRef = (localId) => (node) => {
+    if (node) {
+      pairCardRefs.current[localId] = node;
+    } else {
+      delete pairCardRefs.current[localId];
+    }
+  };
+
   const handleCanvasStatusChange = (key) => (status) => {
     setCanvasStatusMap((prev) => ({
       ...prev,
@@ -210,17 +315,13 @@ export default function CardsList({
   };
 
   const handleNameChange = (e) => {
-    setPackageName(e.target.value);
+    const nextName = e.target.value;
+    setPackageName(nextName);
     setPackageTouched(true);
 
-    if (e.target.value.trim()) {
+    if (nextName.trim()) {
       setNameError('');
     }
-  };
-
-  const handleDescriptionChange = (e) => {
-    setPackageDescription(e.target.value);
-    setPackageTouched(true);
   };
 
   const handleAddCardPair = () => {
@@ -234,6 +335,7 @@ export default function CardsList({
     }
 
     const newCard = createLocalCard();
+    pendingScrollToCardRef.current = newCard.localId;
     setCards((prev) => [...prev, newCard]);
     setActiveCanvasKey(`${newCard.localId}-front`);
   };
@@ -252,6 +354,7 @@ export default function CardsList({
 
       delete canvasRefs.current[`${localId}-front`];
       delete canvasRefs.current[`${localId}-back`];
+      delete pairCardRefs.current[localId];
 
       setCanvasStatusMap((prev) => {
         const next = { ...prev };
@@ -303,10 +406,16 @@ export default function CardsList({
 
       await updatePackage(user.uid, packageItem.id, packageName, packageDescription);
 
-      onPackageUpdated?.({
-  name: packageName,
-  description: packageDescription,
-});
+      lastSavedPackageRef.current = {
+        name: packageName,
+        description: packageDescription,
+      };
+
+      onPackageUpdatedRef.current?.({
+        ...packageItemRef.current,
+        name: packageName,
+        description: packageDescription,
+      });
 
       const nextCards = [];
 
@@ -358,7 +467,7 @@ export default function CardsList({
   };
 
   const renderToolbar = () => (
-    <div className="inline-editor-toolbar">
+    <div className="inline-editor-toolbar sticky-toolbar">
       <div className="advanced-topbar-group">
         <button
           type="button"
@@ -379,8 +488,9 @@ export default function CardsList({
       </div>
 
       <div
-        className={`advanced-topbar-group tools-group brush-type-group ${isBrushTool ? 'open' : 'closed'
-          }`}
+        className={`advanced-topbar-group tools-group brush-type-group ${
+          isBrushTool ? 'open' : 'closed'
+        }`}
         aria-hidden={!isBrushTool}
       >
         {BRUSH_TYPES.map((item, index) => (
@@ -388,8 +498,9 @@ export default function CardsList({
             key={item.id}
             type="button"
             title={item.label}
-            className={`tool-icon-btn compact brush-type-btn ${toolbox.brushType === item.id ? 'active' : ''
-              }`}
+            className={`tool-icon-btn compact brush-type-btn ${
+              toolbox.brushType === item.id ? 'active' : ''
+            }`}
             onClick={() => setToolbox((prev) => ({ ...prev, brushType: item.id }))}
             style={{ '--item-index': index }}
             disabled={!isBrushTool}
@@ -513,150 +624,167 @@ export default function CardsList({
   }
 
   return (
-    <div className="cards-list-container">
-      <div className="cards-package-panel">
-        <div className="cards-package-top">
-          <button className="edit-page-btn" onClick={onBack}>
-            ← Quay lại gói
-          </button>
+  <div className="cards-list-container cards-list-shell">
+    <div className="cards-mini-header">
+      <div className="cards-mini-header-left">
+        <button
+          className="cards-mini-back-btn"
+          onClick={onBack}
+          type="button"
+          aria-label="Quay lại"
+          title="Quay lại"
+        >
+          <FiArrowLeft size={18} />
+        </button>
 
-          <div className="cards-package-status">
-            {isAutoSaving ? (
-              <span className="autosave-badge saving">Đang lưu tên gói...</span>
-            ) : (
-              <span className="autosave-badge saved">Tên gói đã lưu tự động</span>
-            )}
-          </div>
-
-          <div className="cards-package-actions">
-            <button className="btn-add-card" onClick={handleAddCardPair}>
-              ➕ Thêm cặp thẻ
-            </button>
-            <button
-              className="btn-save-all"
-              onClick={handleSaveAll}
-              disabled={savingAll}
-            >
-              {savingAll ? 'Đang lưu...' : '💾 Lưu tất cả'}
-            </button>
-          </div>
-        </div>
-
-        <div className="cards-package-form">
-          <div className="cards-package-field">
-            <label>
-              Tên gói <span className="required-mark">*</span>
-            </label>
-            <input
-              ref={nameInputRef}
-              type="text"
-              value={packageName}
-              onChange={handleNameChange}
-              placeholder="Ví dụ: Từ vựng IELTS, Sinh học 12..."
-            />
-            {nameError && <div className="field-error">{nameError}</div>}
-          </div>
-
-          <div className="cards-package-field">
-            <label>Mô tả</label>
-            <textarea
-              rows={3}
-              value={packageDescription}
-              onChange={handleDescriptionChange}
-              placeholder="Nhập mô tả cho gói"
-            />
-          </div>
+        <div className="cards-mini-header-meta">
+          <h2 className="cards-mini-title">
+            {packageName.trim() || 'Gói thẻ mới'}
+          </h2>
+          <span className="cards-mini-subtitle">
+            {cards.length} cặp thẻ
+          </span>
         </div>
       </div>
 
-      {renderToolbar()}
+      <div className="cards-package-status compact-status">
+        {isAutoSaving ? (
+          <span className="autosave-badge saving">Đang lưu...</span>
+        ) : (
+          <span className="autosave-badge saved">Đã lưu tự động</span>
+        )}
+      </div>
+    </div>
 
-      {error && <div className="error-message">{error}</div>}
-      {saveMessage && <div className="success-message-inline">{saveMessage}</div>}
-
-      {cards.length === 0 ? (
-        <div className="empty-state large-empty-state">
-          <p>📝 Gói này chưa có cặp thẻ nào</p>
-          <p>
-            {canAddCard
-              ? 'Nhấn "Thêm cặp thẻ" để bắt đầu'
-              : 'Hãy nhập tên gói trước, sau đó thêm cặp thẻ'}
-          </p>
+    <div className="cards-package-panel compact-panel">
+      <div className="cards-package-inline">
+        <div className="cards-package-field compact-field compact-name-field">
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={packageName}
+            onChange={handleNameChange}
+            placeholder="Nhập tên gói thẻ..."
+            aria-label="Tên gói"
+          />
         </div>
-      ) : (
-        <div className="pair-list">
-          {cards.map((item, index) => {
-            const frontKey = `${item.localId}-front`;
-            const backKey = `${item.localId}-back`;
+      </div>
 
-            return (
-              <div key={item.localId} className="pair-card">
-                <button
-                  className="pair-delete-icon"
-                  onClick={() => handleDeleteCardPair(item.localId)}
-                  type="button"
-                  aria-label={`Xóa cặp thẻ ${index + 1}`}
-                  title="Xóa cặp thẻ"
+      {nameError && <div className="field-error inline-error">{nameError}</div>}
+    </div>
+
+    {renderToolbar()}
+
+    {error && <div className="error-message">{error}</div>}
+    {saveMessage && <div className="success-message-inline">{saveMessage}</div>}
+
+    {cards.length === 0 ? (
+      <div className="empty-state large-empty-state compact-empty-state">
+        <p>📝 Gói này chưa có cặp thẻ nào</p>
+        <p>
+          {canAddCard
+            ? 'Nhấn nút thêm ở góc phải bên dưới để bắt đầu'
+            : 'Hãy nhập tên gói trước, sau đó thêm cặp thẻ'}
+        </p>
+      </div>
+    ) : (
+      <div className="pair-list">
+        {cards.map((item, index) => {
+          const frontKey = `${item.localId}-front`;
+          const backKey = `${item.localId}-back`;
+
+          return (
+            <div
+              key={item.localId}
+              className="pair-card"
+              ref={setPairCardRef(item.localId)}
+            >
+              <button
+                className="pair-delete-icon"
+                onClick={() => handleDeleteCardPair(item.localId)}
+                type="button"
+                aria-label={`Xóa cặp thẻ ${index + 1}`}
+                title="Xóa cặp thẻ"
+              >
+                ×
+              </button>
+
+              <div className="pair-card-title compact-pair-title">
+                <h3>Cặp thẻ {index + 1}</h3>
+              </div>
+
+              <div className="pair-grid">
+                <div
+                  className={`face-editor-panel ${
+                    activeCanvasKey === frontKey ? 'active' : ''
+                  }`}
+                  onMouseDown={() => setActiveCanvasKey(frontKey)}
+                  onTouchStart={() => setActiveCanvasKey(frontKey)}
                 >
-                  ×
-                </button>
-
-                <div className="pair-card-title">
-                  <h3>Cặp thẻ {index + 1}</h3>
+                  <div className="face-editor-title">Mặt trước</div>
+                  <div className="face-editor-canvas">
+                    <AdvancedCanvas
+                      ref={setCanvasRef(frontKey)}
+                      initialImage={item.front || ''}
+                      tool={toolbox.tool}
+                      brushType={toolbox.brushType}
+                      color={toolbox.color}
+                      size={toolbox.size}
+                      opacity={toolbox.opacity}
+                      onStatusChange={handleCanvasStatusChange(frontKey)}
+                    />
+                  </div>
                 </div>
 
-                <div className="pair-grid">
-                  <div
-                    className={`face-editor-panel ${activeCanvasKey === frontKey ? 'active' : ''
-                      }`}
-                    onMouseDown={() => setActiveCanvasKey(frontKey)}
-                    onTouchStart={() => setActiveCanvasKey(frontKey)}
-                  >
-                    <div className="face-editor-title">Mặt trước</div>
-                    <div className="face-editor-canvas">
-                      <AdvancedCanvas
-                        ref={setCanvasRef(frontKey)}
-                        initialImage={item.front || ''}
-                        tool={toolbox.tool}
-                        brushType={toolbox.brushType}
-                        color={toolbox.color}
-                        size={toolbox.size}
-                        opacity={toolbox.opacity}
-                        onStatusChange={handleCanvasStatusChange(frontKey)}
-                      />
-                    </div>
-                  </div>
-
-                  <div
-                    className={`face-editor-panel ${activeCanvasKey === backKey ? 'active' : ''
-                      }`}
-                    onMouseDown={() => setActiveCanvasKey(backKey)}
-                    onTouchStart={() => setActiveCanvasKey(backKey)}
-                  >
-                    <div className="face-editor-title">Mặt sau</div>
-                    <div className="face-editor-canvas">
-                      <AdvancedCanvas
-                        ref={setCanvasRef(backKey)}
-                        initialImage={item.back || ''}
-                        tool={toolbox.tool}
-                        brushType={toolbox.brushType}
-                        color={toolbox.color}
-                        size={toolbox.size}
-                        opacity={toolbox.opacity}
-                        onStatusChange={handleCanvasStatusChange(backKey)}
-                      />
-                    </div>
+                <div
+                  className={`face-editor-panel ${
+                    activeCanvasKey === backKey ? 'active' : ''
+                  }`}
+                  onMouseDown={() => setActiveCanvasKey(backKey)}
+                  onTouchStart={() => setActiveCanvasKey(backKey)}
+                >
+                  <div className="face-editor-title">Mặt sau</div>
+                  <div className="face-editor-canvas">
+                    <AdvancedCanvas
+                      ref={setCanvasRef(backKey)}
+                      initialImage={item.back || ''}
+                      tool={toolbox.tool}
+                      brushType={toolbox.brushType}
+                      color={toolbox.color}
+                      size={toolbox.size}
+                      opacity={toolbox.opacity}
+                      onStatusChange={handleCanvasStatusChange(backKey)}
+                    />
                   </div>
                 </div>
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
+      </div>
+    )}
 
-          <button className="btn-add-pair-large" onClick={handleAddCardPair}>
-            ➕ Thêm cặp thẻ mới
-          </button>
-        </div>
-      )}
+    <div className="floating-action-group" aria-label="Nhóm thao tác nhanh">
+      <button
+        className="floating-action-btn secondary"
+        onClick={handleAddCardPair}
+        type="button"
+        aria-label="Thêm cặp thẻ"
+        title="Thêm cặp thẻ"
+      >
+        ＋
+      </button>
+      <button
+        className="floating-action-btn primary"
+        onClick={handleSaveAll}
+        type="button"
+        aria-label={savingAll ? 'Đang lưu tất cả' : 'Lưu tất cả'}
+        title={savingAll ? 'Đang lưu...' : 'Lưu tất cả'}
+        disabled={savingAll}
+      >
+        {savingAll ? '…' : '💾'}
+      </button>
     </div>
-  );
+  </div>
+);
 }

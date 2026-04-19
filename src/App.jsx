@@ -49,9 +49,10 @@ function App() {
       alert('Lỗi tạo gói');
     }
   };
+
   const handlePackageUpdated = (patch) => {
-  setSelectedPackage((prev) => (prev ? { ...prev, ...patch } : prev));
-};
+    setSelectedPackage((prev) => (prev ? { ...prev, ...patch } : prev));
+  };
 
   const handleOpenPackage = (packageItem) => {
     setSelectedPackage(packageItem);
@@ -82,23 +83,25 @@ function App() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="header-content">
-          <div className="header-left">
-            <h1 className="app-title">✏️ Flashcard</h1>
-            <p className="header-subtitle">Gói flashcard và thẻ học</p>
-          </div>
+      {currentPage === 'packages' && (
+        <header className="app-header">
+          <div className="header-content">
+            <div className="header-left">
+              <h1 className="app-title">✏️ Flashcard</h1>
+              <p className="header-subtitle">Gói flashcard và thẻ học</p>
+            </div>
 
-          <div className="header-right">
-            <span className="user-greeting">
-              Chào, <strong>{user.email}</strong>
-            </span>
-            <button onClick={() => signOut(auth)} className="logout-btn">
-              Đăng xuất
-            </button>
+            <div className="header-right">
+              <span className="user-greeting">
+                Chào, <strong>{user.email}</strong>
+              </span>
+              <button onClick={() => signOut(auth)} className="logout-btn">
+                Đăng xuất
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       <main className="app-main">
         {currentPage === 'packages' && (
