@@ -21,6 +21,7 @@ function AdvancedCanvas(
     color = '#000000',
     size = 4,
     opacity = 1,
+    backgroundColor = '#ffffff',
     onStatusChange,
   },
   ref
@@ -31,11 +32,10 @@ function AdvancedCanvas(
   const activePointerIdRef = useRef(null);
   const onStatusChangeRef = useRef(onStatusChange);
 
-
   const historyRef = useRef([]);
   const historyStepRef = useRef(-1);
   const interactionRef = useRef(null);
-const docSizeRef = useRef({ width: DOC_WIDTH, height: DOC_HEIGHT });
+  const docSizeRef = useRef({ width: DOC_WIDTH, height: DOC_HEIGHT });
 
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [historyStep, setHistoryStep] = useState(0);
@@ -100,7 +100,7 @@ const docSizeRef = useRef({ width: DOC_WIDTH, height: DOC_HEIGHT });
     exportCanvas.height = height;
 
     const ctx = exportCanvas.getContext('2d', { willReadFrequently: true });
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, width, height);
 
     const contentCanvas = getContentCanvas();
@@ -451,7 +451,7 @@ const docSizeRef = useRef({ width: DOC_WIDTH, height: DOC_HEIGHT });
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, displaySize.width, displaySize.height);
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, displaySize.width, displaySize.height);
 
     ctx.drawImage(contentCanvas, offsetX, offsetY, drawWidth, drawHeight);
@@ -805,18 +805,18 @@ const docSizeRef = useRef({ width: DOC_WIDTH, height: DOC_HEIGHT });
 
   useEffect(() => {
     renderCanvas();
-  }, [displaySize, tool, brushType, color, size, opacity]);
+  }, [displaySize, tool, brushType, color, size, opacity, backgroundColor]);
 
-useEffect(() => {
-  onStatusChangeRef.current = onStatusChange;
-}, [onStatusChange]);
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
-useEffect(() => {
-  onStatusChangeRef.current?.({
-    canUndo: historyStep > 0,
-    canRedo: historyStep < historyLength - 1,
-  });
-}, [historyStep, historyLength]);
+  useEffect(() => {
+    onStatusChangeRef.current?.({
+      canUndo: historyStep > 0,
+      canRedo: historyStep < historyLength - 1,
+    });
+  }, [historyStep, historyLength]);
 
   useEffect(() => {
     return () => releasePointer();
