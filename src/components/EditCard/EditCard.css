@@ -52,7 +52,8 @@
   border-color: transparent;
 }
 
-.edit-page-btn:disabled {
+.edit-page-btn:disabled,
+.editor-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -73,6 +74,106 @@
   border-color: #111827;
 }
 
+.edit-card-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  overflow-x: auto;
+}
+
+.advanced-topbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 10px;
+  border-right: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.advanced-topbar-group:last-child {
+  border-right: none;
+}
+
+.tools-group {
+  gap: 6px;
+}
+
+.editor-btn,
+.tool-icon-btn {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  font-weight: 600;
+}
+
+.editor-btn {
+  padding: 8px 10px;
+}
+
+.editor-btn:hover,
+.tool-icon-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.editor-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.color-input {
+  width: 42px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+}
+
+.editor-slider {
+  width: 110px;
+  cursor: pointer;
+}
+
+.zoom-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5563;
+  min-width: 48px;
+  text-align: center;
+}
+
+.tool-icon-btn.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 50px;
+  padding: 6px 8px;
+}
+
+.tool-icon-btn.compact.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: transparent;
+}
+
+.tool-icon-btn.compact small {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
 .edit-card-error {
   padding: 10px 14px;
   background: #fef2f2;
@@ -82,23 +183,75 @@
 }
 
 .edit-card-editor-area {
-  position: relative;
   flex: 1;
   min-height: 0;
-  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(102, 126, 234, 0.08), transparent 35%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
 }
 
-.editor-face {
+.edit-card-flip-scene {
+  width: min(100%, 980px);
+  aspect-ratio: 3 / 2;
+  perspective: 1800px;
+}
+
+.edit-card-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-style: preserve-3d;
+}
+
+.edit-card-flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+
+.edit-card-canvas-face {
   position: absolute;
   inset: 0;
-  opacity: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  backface-visibility: hidden;
+  background: #ffffff;
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.18),
+    0 10px 24px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.18);
   pointer-events: none;
-  transition: opacity 0.2s ease;
 }
 
-.editor-face.active {
-  opacity: 1;
+.edit-card-canvas-face.front {
+  transform: rotateY(0deg);
+}
+
+.edit-card-canvas-face.back {
+  transform: rotateY(180deg);
+}
+
+.edit-card-flip-inner:not(.flipped) .edit-card-canvas-face.front {
   pointer-events: auto;
+}
+
+.edit-card-flip-inner.flipped .edit-card-canvas-face.back {
+  pointer-events: auto;
+}
+
+.edit-card-canvas-face .advanced-editor,
+.edit-card-canvas-face .advanced-stage {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 1024px) {
+  .edit-card-flip-scene {
+    width: min(100%, 860px);
+  }
 }
 
 @media (max-width: 900px) {
@@ -112,4 +265,36 @@
     justify-content: space-between;
     flex-wrap: wrap;
   }
+}
+
+@media (max-width: 768px) {
+  .edit-card-editor-area {
+    padding: 14px;
+  }
+
+  .edit-card-flip-scene {
+    width: 100%;
+    aspect-ratio: 5 / 4;
+  }
+
+  .tool-icon-btn.compact {
+    min-width: 52px;
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 480px) {
+  .edit-card-flip-scene {
+    aspect-ratio: 1 / 1;
+  }
+
+  .editor-slider {
+    width: 88px;
+  }
+}
+.edit-card-flip-scene {
+  width: min(100%, 980px);
+  aspect-ratio: 3 / 2;
+  perspective: 1800px;
+  position: relative;
 }

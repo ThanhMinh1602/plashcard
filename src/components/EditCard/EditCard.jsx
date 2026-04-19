@@ -3,13 +3,88 @@ import { addFlashcard, updateFlashcard } from '../../services/flashcardService';
 import AdvancedCanvas from '../AdvancedCanvas/AdvancedCanvas';
 import './EditCard.css';
 
+const TOOL_LIST = [
+  { id: 'brush', icon: '🖌️', label: 'Brush' },
+  { id: 'eraser', icon: '🧽', label: 'Eraser' },
+  { id: 'line', icon: '📏', label: 'Line' },
+  { id: 'rectangle', icon: '▭', label: 'Rectangle' },
+  { id: 'circle', icon: '⭕', label: 'Circle' },
+  { id: 'fill', icon: '🪣', label: 'Fill' },
+  { id: 'text', icon: '🔤', label: 'Text' },
+  { id: 'eyedropper', icon: '🎯', label: 'Eyedropper' },
+];
+
+const DEFAULT_TOOLBOX = {
+  tool: 'brush',
+  color: '#000000',
+  size: 4,
+  opacity: 1,
+};
+
+const DEFAULT_STATUS = {
+  canUndo: false,
+  canRedo: false,
+  zoom: 1,
+};
+
 export default function EditCard({ user, card, onBack, onCardSaved }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isFlipped, setIsFlipped] = useState(false);
 
+  const [frontToolbox, setFrontToolbox] = useState(DEFAULT_TOOLBOX);
+  const [backToolbox, setBackToolbox] = useState(DEFAULT_TOOLBOX);
+
+  const [frontStatus, setFrontStatus] = useState(DEFAULT_STATUS);
+  const [backStatus, setBackStatus] = useState(DEFAULT_STATUS);
+
   const frontRef = useRef(null);
   const backRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const activeRef = isFlipped ? backRef : frontRef;
+  const activeToolbox = isFlipped ? backToolbox : frontToolbox;
+  const activeStatus = isFlipped ? backStatus : frontStatus;
+
+  const setActiveToolbox = (patch) => {
+    if (isFlipped) {
+      setBackToolbox((prev) => ({ ...prev, ...patch }));
+    } else {
+      setFrontToolbox((prev) => ({ ...prev, ...patch }));
+    }
+  };
+
+  const handleStatusChange = (face) => (status) => {
+    if (status?.pickedColor) {
+      if (face === 'front') {
+        setFrontToolbox((prev) => ({ ...prev, color: status.pickedColor }));
+      } else {
+        setBackToolbox((prev) => ({ ...prev, color: status.pickedColor }));
+      }
+      return;
+    }
+
+    if (face === 'front') {
+      setFrontStatus((prev) => ({ ...prev, ...status }));
+    } else {
+      setBackStatus((prev) => ({ ...prev, ...status }));
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      await activeRef.current?.importImageFile?.(file);
+    } finally {
+      e.target.value = '';
+    }
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -68,15 +143,163 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
         </div>
       </div>
 
+      <div className="edit-card-toolbar">
+        <div className="advanced-topbar-group">
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => activeRef.current?.undo?.()}
+            disabled={!activeStatus.canUndo}
+          >
+            ↶ Undo
+          </button>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => activeRef.current?.redo?.()}
+            disabled={!activeStatus.canRedo}
+          >
+            ↷ Redo
+          </button>
+        </div>
+
+        <div className="advanced-topbar-group tools-group">
+          {TOOL_LIST.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              title={item.label}
+              className={`tool-icon-btn compact ${
+                activeToolbox.tool === item.id ? 'active' : ''
+              }`}
+              onClick={() => setActiveToolbox({ tool: item.id })}
+            >
+              <span>{item.icon}</span>
+              <small>{item.label}</small>
+            </button>
+          ))}
+        </div>
+
+        <div className="advanced-topbar-group">
+          <label className="editor-label">Color</label>
+          <input
+            type="color"
+            value={activeToolbox.color}
+            onChange={(e) => setActiveToolbox({ color: e.target.value })}
+            className="color-input"
+          />
+        </div>
+
+        <div className="advanced-topbar-group">
+          <label className="editor-label">Size {activeToolbox.size}px</label>
+          <input
+            type="range"
+            min="1"
+            max="80"
+            value={activeToolbox.size}
+            onChange={(e) => setActiveToolbox({ size: Number(e.target.value) })}
+            className="editor-slider"
+          />
+        </div>
+
+        <div className="advanced-topbar-group">
+          <label className="editor-label">
+            Opacity {Math.round(activeToolbox.opacity * 100)}%
+          </label>
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.1"
+            value={activeToolbox.opacity}
+            onChange={(e) => setActiveToolbox({ opacity: Number(e.target.value) })}
+            className="editor-slider"
+          />
+        </div>
+
+        <div className="advanced-topbar-group">
+          <button type="button" className="editor-btn" onClick={handleImportClick}>
+            📂 Import
+          </button>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => activeRef.current?.exportImage?.()}
+          >
+            💾 Export
+          </button>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => activeRef.current?.clear?.()}
+          >
+            🗑 Clear
+          </button>
+        </div>
+
+        <div className="advanced-topbar-group">
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => activeRef.current?.zoomOut?.()}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => activeRef.current?.fitToView?.()}
+          >
+            Fit
+          </button>
+          <button
+            type="button"
+            className="editor-btn"
+            onClick={() => activeRef.current?.zoomIn?.()}
+          >
+            +
+          </button>
+          <span className="zoom-value">{Math.round(activeStatus.zoom * 100)}%</span>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImportChange}
+          hidden
+        />
+      </div>
+
       {error && <div className="edit-card-error">{error}</div>}
 
       <div className="edit-card-editor-area">
-        <div className={`editor-face ${!isFlipped ? 'active' : ''}`}>
-          <AdvancedCanvas ref={frontRef} initialImage={card?.front || ''} />
-        </div>
+        <div className="edit-card-flip-scene">
+          <div className={`edit-card-flip-inner ${isFlipped ? 'flipped' : ''}`}>
+            <div className="edit-card-canvas-face front">
+              <AdvancedCanvas
+                ref={frontRef}
+                initialImage={card?.front || ''}
+                tool={frontToolbox.tool}
+                color={frontToolbox.color}
+                size={frontToolbox.size}
+                opacity={frontToolbox.opacity}
+                onStatusChange={handleStatusChange('front')}
+              />
+            </div>
 
-        <div className={`editor-face ${isFlipped ? 'active' : ''}`}>
-          <AdvancedCanvas ref={backRef} initialImage={card?.back || ''} />
+            <div className="edit-card-canvas-face back">
+              <AdvancedCanvas
+                ref={backRef}
+                initialImage={card?.back || ''}
+                tool={backToolbox.tool}
+                color={backToolbox.color}
+                size={backToolbox.size}
+                opacity={backToolbox.opacity}
+                onStatusChange={handleStatusChange('back')}
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
