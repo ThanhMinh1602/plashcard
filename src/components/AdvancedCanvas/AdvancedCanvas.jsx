@@ -8,7 +8,8 @@ import React, {
 import { getStroke } from 'perfect-freehand';
 import './AdvancedCanvas.css';
 
-const DOC_SIZE = 1200;
+const DOC_WIDTH = 900;
+const DOC_HEIGHT = 1200;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -28,11 +29,13 @@ function AdvancedCanvas(
   const viewCanvasRef = useRef(null);
   const contentCanvasRef = useRef(null);
   const activePointerIdRef = useRef(null);
+  const onStatusChangeRef = useRef(onStatusChange);
+
 
   const historyRef = useRef([]);
   const historyStepRef = useRef(-1);
   const interactionRef = useRef(null);
-  const docSizeRef = useRef({ width: DOC_SIZE, height: DOC_SIZE });
+const docSizeRef = useRef({ width: DOC_WIDTH, height: DOC_HEIGHT });
 
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [historyStep, setHistoryStep] = useState(0);
@@ -781,7 +784,7 @@ function AdvancedCanvas(
   useEffect(() => {
     if (contentCanvasRef.current) return;
 
-    contentCanvasRef.current = createOffscreenCanvas(DOC_SIZE, DOC_SIZE);
+    contentCanvasRef.current = createOffscreenCanvas(DOC_WIDTH, DOC_HEIGHT);
 
     const boot = async () => {
       if (initialImage) {
@@ -804,12 +807,16 @@ function AdvancedCanvas(
     renderCanvas();
   }, [displaySize, tool, brushType, color, size, opacity]);
 
-  useEffect(() => {
-    onStatusChange?.({
-      canUndo: historyStep > 0,
-      canRedo: historyStep < historyLength - 1,
-    });
-  }, [historyStep, historyLength, onStatusChange]);
+useEffect(() => {
+  onStatusChangeRef.current = onStatusChange;
+}, [onStatusChange]);
+
+useEffect(() => {
+  onStatusChangeRef.current?.({
+    canUndo: historyStep > 0,
+    canRedo: historyStep < historyLength - 1,
+  });
+}, [historyStep, historyLength]);
 
   useEffect(() => {
     return () => releasePointer();

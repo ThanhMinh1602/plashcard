@@ -18,7 +18,7 @@ body {
 /* App Container */
 .app-container {
   min-height: 100vh;
-  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -106,8 +106,10 @@ body {
   width: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: #f8f9fa;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 768px) {
