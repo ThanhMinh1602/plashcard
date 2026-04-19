@@ -1,7 +1,7 @@
 .cards-list-container {
   width: 100%;
   margin: 0 auto;
-  padding: 0 20px 120px;
+  padding: 0 0 120px;
 }
 
 .cards-list-shell {
@@ -16,8 +16,8 @@
 }
 
 .error-message {
-  margin: 10px 0 0;
-  padding: 10px 0;
+  margin: 10px 10px 10px;
+  padding: 10px 10px;
   color: #c33;
   border-bottom: 1px solid #f0caca;
 }

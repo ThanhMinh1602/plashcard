@@ -19,6 +19,12 @@
   color: #111827;
 }
 
+.packages-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .packages-header p {
   margin: 0;
   color: #6b7280;
@@ -79,19 +85,37 @@
   font-weight: 700;
 }
 
+.package-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.package-btn-icon svg {
+  flex-shrink: 0;
+}
+
 .btn-open {
   background: #111827;
   color: white;
 }
 
-.btn-edit {
-  background: #eef2ff;
-  color: #4338ca;
-}
-
 .btn-delete {
   background: #fee2e2;
   color: #dc2626;
+}
+
+.packages-empty-state {
+  background: white;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  padding: 60px 20px;
+}
+
+.packages-empty-icon {
+  color: #6b7280;
 }
 
 @media (max-width: 768px) {

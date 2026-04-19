@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { auth } from './services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { addPackage } from './services/flashcardService';
-
+import ConfirmModal from './components/Common/ConfirmModal';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import ForgotPassword from './components/Auth/ForgotPassword';
@@ -14,7 +14,8 @@ import './App.css';
 function App() {
   const [user, setUser] = useState(null);
   const [authMode, setAuthMode] = useState('login');
-
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [currentPage, setCurrentPage] = useState('packages');
   const [selectedPackage, setSelectedPackage] = useState(null);
 
@@ -58,7 +59,22 @@ function App() {
     setSelectedPackage(packageItem);
     setCurrentPage('cards');
   };
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
 
+  const handleConfirmLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await signOut(auth);
+      setShowLogoutModal(false);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi đăng xuất');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
   const handleBackToPackages = () => {
     setCurrentPage('packages');
     setSelectedPackage(null);
@@ -95,7 +111,7 @@ function App() {
               <span className="user-greeting">
                 Chào, <strong>{user.email}</strong>
               </span>
-              <button onClick={() => signOut(auth)} className="logout-btn">
+              <button onClick={handleLogoutClick} className="logout-btn">
                 Đăng xuất
               </button>
             </div>
@@ -121,8 +137,20 @@ function App() {
           />
         )}
       </main>
+        <ConfirmModal
+    open={showLogoutModal}
+    title="Đăng xuất?"
+    message="Bạn sẽ cần đăng nhập lại để tiếp tục sử dụng ứng dụng."
+    confirmText="Đăng xuất"
+    cancelText="Ở lại"
+    variant="logout"
+    loading={isLoggingOut}
+    onConfirm={handleConfirmLogout}
+    onClose={() => setShowLogoutModal(false)}
+  />
     </div>
   );
+
 }
 
 export default App;

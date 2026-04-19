@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ConfirmModal from '../Common/ConfirmModal';
 import {
   FiArrowLeft,
   FiCircle,
@@ -79,7 +80,8 @@ export default function CardsList({
   const [savingAll, setSavingAll] = useState(false);
   const [error, setError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
-
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [isDeletingCard, setIsDeletingCard] = useState(false);
   const [packageName, setPackageName] = useState(packageItem?.name || '');
   const [packageDescription, setPackageDescription] = useState(
     packageItem?.description || ''
@@ -413,14 +415,23 @@ export default function CardsList({
     setActiveCanvasKey(`${newCard.localId}-front`);
   };
 
-  const handleDeleteCardPair = async (localId) => {
-    const target = cards.find((item) => item.localId === localId);
-    if (!target) return;
+  const handleDeleteCardPair = (localId) => {
+    setDeleteTargetId(localId);
+  };
 
-    const confirmed = window.confirm('Bạn có chắc muốn xóa thẻ này không?');
-    if (!confirmed) return;
+  const handleConfirmDeleteCard = async () => {
+    const localId = deleteTargetId;
+    if (!localId) return;
+
+    const target = cards.find((item) => item.localId === localId);
+    if (!target) {
+      setDeleteTargetId(null);
+      return;
+    }
 
     try {
+      setIsDeletingCard(true);
+
       if (target.id) {
         await deleteFlashcard(user.uid, packageItem.id, target.id);
       }
@@ -437,9 +448,12 @@ export default function CardsList({
       });
 
       setCards((prev) => prev.filter((item) => item.localId !== localId));
+      setDeleteTargetId(null);
     } catch (err) {
       console.error(err);
       alert('Lỗi xóa thẻ');
+    } finally {
+      setIsDeletingCard(false);
     }
   };
 
@@ -549,9 +563,8 @@ export default function CardsList({
       </div>
 
       <div
-        className={`advanced-topbar-group tools-group brush-type-group ${
-          isBrushTool ? 'open' : 'closed'
-        }`}
+        className={`advanced-topbar-group tools-group brush-type-group ${isBrushTool ? 'open' : 'closed'
+          }`}
         aria-hidden={!isBrushTool}
       >
         {BRUSH_TYPES.map((item, index) => {
@@ -562,9 +575,8 @@ export default function CardsList({
               key={item.id}
               type="button"
               title={item.label}
-              className={`tool-icon-btn compact brush-type-btn ${
-                toolbox.brushType === item.id ? 'active' : ''
-              }`}
+              className={`tool-icon-btn compact brush-type-btn ${toolbox.brushType === item.id ? 'active' : ''
+                }`}
               onClick={() => setToolbox((prev) => ({ ...prev, brushType: item.id }))}
               style={{ '--item-index': index }}
               disabled={!isBrushTool}
@@ -586,9 +598,8 @@ export default function CardsList({
               key={item.id}
               type="button"
               title={item.label}
-              className={`tool-icon-btn compact ${
-                toolbox.tool === item.id ? 'active' : ''
-              }`}
+              className={`tool-icon-btn compact ${toolbox.tool === item.id ? 'active' : ''
+                }`}
               onClick={() => setToolbox((prev) => ({ ...prev, tool: item.id }))}
             >
               <Icon size={16} />
@@ -733,9 +744,8 @@ export default function CardsList({
               title="Sửa tên gói"
             >
               <span
-                className={`cards-mini-title ${
-                  !packageName.trim() ? 'is-placeholder' : ''
-                }`}
+                className={`cards-mini-title ${!packageName.trim() ? 'is-placeholder' : ''
+                  }`}
               >
                 {packageName.trim() || 'Nhấn để đặt tên gói'}
               </span>
@@ -792,9 +802,8 @@ export default function CardsList({
 
                 <div className="pair-grid">
                   <div
-                    className={`face-editor-panel face-front ${
-                      activeCanvasKey === frontKey ? 'active' : ''
-                    }`}
+                    className={`face-editor-panel face-front ${activeCanvasKey === frontKey ? 'active' : ''
+                      }`}
                     onMouseDown={() => setActiveCanvasKey(frontKey)}
                     onTouchStart={() => setActiveCanvasKey(frontKey)}
                   >
@@ -814,9 +823,8 @@ export default function CardsList({
                   </div>
 
                   <div
-                    className={`face-editor-panel face-back ${
-                      activeCanvasKey === backKey ? 'active' : ''
-                    }`}
+                    className={`face-editor-panel face-back ${activeCanvasKey === backKey ? 'active' : ''
+                      }`}
                     onMouseDown={() => setActiveCanvasKey(backKey)}
                     onTouchStart={() => setActiveCanvasKey(backKey)}
                   >
@@ -862,6 +870,17 @@ export default function CardsList({
           {savingAll ? '…' : <FiSave size={20} />}
         </button>
       </div>
+      <ConfirmModal
+        open={Boolean(deleteTargetId)}
+        title="Xóa thẻ này?"
+        message="Hành động này sẽ xóa cả mặt trước và mặt sau của thẻ."
+        confirmText="Xóa"
+        cancelText="Hủy"
+        variant="danger"
+        loading={isDeletingCard}
+        onConfirm={handleConfirmDeleteCard}
+        onClose={() => setDeleteTargetId(null)}
+      />
     </div>
   );
 }
