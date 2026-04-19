@@ -5,7 +5,10 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { getStroke } from 'perfect-freehand';
 import './AdvancedCanvas.css';
+
+const DOC_SIZE = 1200;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -29,7 +32,7 @@ function AdvancedCanvas(
   const historyRef = useRef([]);
   const historyStepRef = useRef(-1);
   const interactionRef = useRef(null);
-  const docSizeRef = useRef({ width: 0, height: 0 });
+  const docSizeRef = useRef({ width: DOC_SIZE, height: DOC_SIZE });
 
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
   const [historyStep, setHistoryStep] = useState(0);
@@ -39,12 +42,19 @@ function AdvancedCanvas(
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
+
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.clearRect(0, 0, width, height);
+
     return canvas;
   };
 
   const getContentCanvas = () => contentCanvasRef.current;
+
+  const getPointerPressure = (e) => {
+    const p = typeof e?.pressure === 'number' ? e.pressure : 0.5;
+    return p > 0 ? p : 0.5;
+  };
 
   const loadImageToCanvas = (canvas, src, mode = 'stretch') =>
     new Promise((resolve) => {
@@ -141,13 +151,23 @@ function AdvancedCanvas(
     const canvas = viewCanvasRef.current;
     const { width: docWidth, height: docHeight } = docSizeRef.current;
 
-    if (!canvas || !docWidth || !docHeight || !displaySize.width || !displaySize.height) {
+    if (
+      !canvas ||
+      !docWidth ||
+      !docHeight ||
+      !displaySize.width ||
+      !displaySize.height
+    ) {
       return { x: 0, y: 0, clientX: 0, clientY: 0 };
     }
 
     const rect = canvas.getBoundingClientRect();
     const { clientX, clientY } = getClientPoint(e);
     const { drawWidth, drawHeight, offsetX, offsetY } = getContainRect();
+
+    if (!drawWidth || !drawHeight) {
+      return { x: 0, y: 0, clientX, clientY };
+    }
 
     const localX = clientX - rect.left - offsetX;
     const localY = clientY - rect.top - offsetY;
@@ -230,6 +250,179 @@ function AdvancedCanvas(
     await restoreSnapshot(historyRef.current[historyStepRef.current]);
   };
 
+  const getBrushStrokeOptions = (currentBrushType, currentSize, isComplete = false) => {
+    switch (currentBrushType) {
+      case 'pen':
+        return {
+          size: currentSize,
+          thinning: 0.55,
+          smoothing: 0.62,
+          streamline: 0.42,
+          simulatePressure: false,
+          last: isComplete,
+        };
+
+      case 'pencil':
+        return {
+          size: Math.max(1, currentSize * 0.9),
+          thinning: 0.2,
+          smoothing: 0.35,
+          streamline: 0.18,
+          simulatePressure: false,
+          last: isComplete,
+          start: { taper: currentSize * 0.4, cap: true },
+          end: { taper: currentSize * 0.6, cap: true },
+        };
+
+      case 'marker':
+        return {
+          size: currentSize * 1.45,
+          thinning: 0.08,
+          smoothing: 0.72,
+          streamline: 0.55,
+          simulatePressure: false,
+          last: isComplete,
+        };
+
+      case 'calligraphy':
+        return {
+          size: currentSize * 1.08,
+          thinning: -0.12,
+          smoothing: 0.78,
+          streamline: 0.6,
+          simulatePressure: false,
+          last: isComplete,
+          start: { taper: currentSize * 0.8, cap: true },
+          end: { taper: currentSize * 1.2, cap: true },
+        };
+
+      default:
+        return {
+          size: currentSize,
+          thinning: 0.5,
+          smoothing: 0.5,
+          streamline: 0.5,
+          simulatePressure: false,
+          last: isComplete,
+        };
+    }
+  };
+
+  const buildStrokePath = (outlinePoints) => {
+    const path = new Path2D();
+
+    if (!outlinePoints?.length) return path;
+
+    path.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
+
+    for (let i = 1; i < outlinePoints.length; i += 1) {
+      path.lineTo(outlinePoints[i][0], outlinePoints[i][1]);
+    }
+
+    path.closePath();
+    return path;
+  };
+
+  const drawPerfectFreehandStroke = ({
+    ctx,
+    points,
+    currentBrushType,
+    currentColor,
+    currentOpacity,
+    currentSize,
+    isComplete,
+  }) => {
+    if (!points?.length) return;
+
+    const outline = getStroke(
+      points,
+      getBrushStrokeOptions(currentBrushType, currentSize, isComplete)
+    );
+
+    if (!outline.length) return;
+
+    const path = buildStrokePath(outline);
+
+    ctx.save();
+
+    if (currentBrushType === 'pencil') {
+      ctx.globalAlpha = currentOpacity * 0.55;
+    } else if (currentBrushType === 'marker') {
+      ctx.globalAlpha = currentOpacity * 0.28;
+    } else {
+      ctx.globalAlpha = currentOpacity;
+    }
+
+    ctx.fillStyle = currentColor;
+    ctx.fill(path);
+
+    if (currentBrushType === 'pencil') {
+      const bounds = points.reduce(
+        (acc, p) => ({
+          minX: Math.min(acc.minX, p[0]),
+          maxX: Math.max(acc.maxX, p[0]),
+          minY: Math.min(acc.minY, p[1]),
+          maxY: Math.max(acc.maxY, p[1]),
+        }),
+        {
+          minX: Infinity,
+          maxX: -Infinity,
+          minY: Infinity,
+          maxY: -Infinity,
+        }
+      );
+
+      const density = Math.max(
+        12,
+        Math.floor(
+          (bounds.maxX - bounds.minX + (bounds.maxY - bounds.minY)) * 0.08
+        )
+      );
+
+      ctx.save();
+      ctx.clip(path);
+
+      for (let i = 0; i < density; i += 1) {
+        const x = bounds.minX + Math.random() * Math.max(1, bounds.maxX - bounds.minX);
+        const y = bounds.minY + Math.random() * Math.max(1, bounds.maxY - bounds.minY);
+        const r = Math.max(0.35, currentSize * 0.06 * Math.random());
+
+        ctx.beginPath();
+        ctx.globalAlpha = currentOpacity * (0.05 + Math.random() * 0.08);
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+  };
+
+  const drawEraserStroke = (canvas, from, to) => {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size;
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,1)';
+    ctx.fill();
+
+    ctx.restore();
+  };
+
   const renderCanvas = (preview = null) => {
     const canvas = viewCanvasRef.current;
     const contentCanvas = getContentCanvas();
@@ -260,172 +453,62 @@ function AdvancedCanvas(
 
     ctx.drawImage(contentCanvas, offsetX, offsetY, drawWidth, drawHeight);
 
-    if (preview) {
-      const start = docToDisplayPoint(preview.start);
-      const current = docToDisplayPoint(preview.current);
+    if (!preview) return;
 
+    if (preview.tool === 'freehand') {
       ctx.save();
-      ctx.strokeStyle = preview.color;
-      ctx.fillStyle = preview.color;
-      ctx.globalAlpha = preview.opacity;
-      ctx.lineWidth = Math.max(1, preview.size * scale);
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      ctx.translate(offsetX, offsetY);
+      ctx.scale(scale, scale);
 
-      if (preview.tool === 'line') {
-        ctx.beginPath();
-        ctx.moveTo(start.x, start.y);
-        ctx.lineTo(current.x, current.y);
-        ctx.stroke();
-      } else if (preview.tool === 'rectangle') {
-        ctx.strokeRect(
-          start.x,
-          start.y,
-          current.x - start.x,
-          current.y - start.y
-        );
-      } else if (preview.tool === 'circle') {
-        const radius = Math.sqrt(
-          Math.pow(current.x - start.x, 2) +
+      drawPerfectFreehandStroke({
+        ctx,
+        points: preview.points,
+        currentBrushType: preview.brushType,
+        currentColor: preview.color,
+        currentOpacity: preview.opacity,
+        currentSize: preview.size,
+        isComplete: false,
+      });
+
+      ctx.restore();
+      return;
+    }
+
+    const start = docToDisplayPoint(preview.start);
+    const current = docToDisplayPoint(preview.current);
+
+    ctx.save();
+    ctx.strokeStyle = preview.color;
+    ctx.fillStyle = preview.color;
+    ctx.globalAlpha = preview.opacity;
+    ctx.lineWidth = Math.max(1, preview.size * scale);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (preview.tool === 'line') {
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(current.x, current.y);
+      ctx.stroke();
+    } else if (preview.tool === 'rectangle') {
+      ctx.strokeRect(
+        start.x,
+        start.y,
+        current.x - start.x,
+        current.y - start.y
+      );
+    } else if (preview.tool === 'circle') {
+      const radius = Math.sqrt(
+        Math.pow(current.x - start.x, 2) +
           Math.pow(current.y - start.y, 2)
-        );
-        ctx.beginPath();
-        ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      ctx.restore();
+      );
+      ctx.beginPath();
+      ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
     }
+
+    ctx.restore();
   };
-
-  const drawBrushStroke = (canvas, from, to, erase = false) => {
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-  if (erase) {
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = size;
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = 'rgba(0,0,0,1)';
-
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,1)';
-    ctx.fill();
-    ctx.restore();
-    return;
-  }
-
-  if (brushType === 'pen') {
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = size;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = opacity;
-    ctx.strokeStyle = color;
-
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.restore();
-    return;
-  }
-
-  if (brushType === 'pencil') {
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = Math.max(1, size * 0.85);
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = opacity * 0.45;
-    ctx.strokeStyle = color;
-
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-
-    const dist = Math.hypot(to.x - from.x, to.y - from.y);
-    const dots = Math.max(2, Math.floor(dist * 1.5));
-
-    for (let i = 0; i < dots; i += 1) {
-      const t = i / dots;
-      const x = from.x + (to.x - from.x) * t + (Math.random() - 0.5) * size * 0.6;
-      const y = from.y + (to.y - from.y) * t + (Math.random() - 0.5) * size * 0.6;
-
-      ctx.beginPath();
-      ctx.globalAlpha = opacity * (0.12 + Math.random() * 0.18);
-      ctx.arc(x, y, Math.max(0.6, size * 0.12), 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-
-    ctx.restore();
-    return;
-  }
-
-  if (brushType === 'marker') {
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = size * 1.6;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = opacity * 0.28;
-    ctx.strokeStyle = color;
-
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-
-    ctx.restore();
-    return;
-  }
-
-  if (brushType === 'calligraphy') {
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = opacity;
-    ctx.fillStyle = color;
-
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const dist = Math.hypot(dx, dy);
-    const angle = Math.atan2(dy, dx) + Math.PI / 4;
-    const step = Math.max(1, size * 0.35);
-    const stamps = Math.max(1, Math.ceil(dist / step));
-
-    for (let i = 0; i <= stamps; i += 1) {
-      const t = stamps === 0 ? 0 : i / stamps;
-      const x = from.x + dx * t;
-      const y = from.y + dy * t;
-
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(angle);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, size * 0.9, Math.max(1, size * 0.28), 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    ctx.restore();
-  }
-};
 
   const beginInteraction = (e) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -440,16 +523,31 @@ function AdvancedCanvas(
     activePointerIdRef.current = e.pointerId ?? null;
     viewCanvasRef.current?.setPointerCapture?.(e.pointerId);
 
+    const pressure = getPointerPressure(e);
+
     interactionRef.current = {
       mode: 'draw',
       tool,
       start: { x: point.x, y: point.y },
       last: { x: point.x, y: point.y },
+      points: [[point.x, point.y, pressure]],
     };
 
-    if (tool === 'brush' || tool === 'eraser') {
-      drawBrushStroke(canvas, point, point, tool === 'eraser');
+    if (tool === 'eraser') {
+      drawEraserStroke(canvas, point, point);
       renderCanvas();
+      return;
+    }
+
+    if (tool === 'brush') {
+      renderCanvas({
+        tool: 'freehand',
+        points: interactionRef.current.points,
+        brushType,
+        color,
+        size,
+        opacity,
+      });
     }
   };
 
@@ -472,16 +570,37 @@ function AdvancedCanvas(
 
     const currentTool = interactionRef.current.tool;
 
-    if (currentTool === 'brush' || currentTool === 'eraser') {
-      drawBrushStroke(
-        canvas,
-        interactionRef.current.last,
-        current,
-        currentTool === 'eraser'
-      );
-
+    if (currentTool === 'eraser') {
+      drawEraserStroke(canvas, interactionRef.current.last, current);
       interactionRef.current.last = { x: current.x, y: current.y };
       renderCanvas();
+      return;
+    }
+
+    if (currentTool === 'brush') {
+      const lastPoint =
+        interactionRef.current.points[interactionRef.current.points.length - 1];
+
+      const dist = Math.hypot(current.x - lastPoint[0], current.y - lastPoint[1]);
+
+      if (dist < 0.6) return;
+
+      interactionRef.current.points.push([
+        current.x,
+        current.y,
+        getPointerPressure(e),
+      ]);
+
+      interactionRef.current.last = { x: current.x, y: current.y };
+
+      renderCanvas({
+        tool: 'freehand',
+        points: interactionRef.current.points,
+        brushType,
+        color,
+        size,
+        opacity,
+      });
       return;
     }
 
@@ -511,13 +630,40 @@ function AdvancedCanvas(
 
     e.preventDefault();
     const current = toDocPoint(e);
-
     const currentTool = interactionRef.current.tool;
     const canvas = getContentCanvas();
 
     if (!canvas) {
       interactionRef.current = null;
       releasePointer();
+      return;
+    }
+
+    if (currentTool === 'brush') {
+      const last =
+        interactionRef.current.points[interactionRef.current.points.length - 1];
+      const finalPressure = getPointerPressure(e);
+
+      if (!last || last[0] !== current.x || last[1] !== current.y) {
+        interactionRef.current.points.push([current.x, current.y, finalPressure]);
+      }
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      drawPerfectFreehandStroke({
+        ctx,
+        points: interactionRef.current.points,
+        currentBrushType: brushType,
+        currentColor: color,
+        currentOpacity: opacity,
+        currentSize: size,
+        isComplete: true,
+      });
+
+      interactionRef.current = null;
+      releasePointer();
+      renderCanvas();
+      commitHistory();
       return;
     }
 
@@ -633,18 +779,9 @@ function AdvancedCanvas(
   }, []);
 
   useEffect(() => {
-    if (!displaySize.width || !displaySize.height || docSizeRef.current.width) return;
+    if (contentCanvasRef.current) return;
 
-    const initialDoc = {
-      width: displaySize.width,
-      height: displaySize.height,
-    };
-
-    docSizeRef.current = initialDoc;
-    contentCanvasRef.current = createOffscreenCanvas(
-      initialDoc.width,
-      initialDoc.height
-    );
+    contentCanvasRef.current = createOffscreenCanvas(DOC_SIZE, DOC_SIZE);
 
     const boot = async () => {
       if (initialImage) {
@@ -661,11 +798,11 @@ function AdvancedCanvas(
     };
 
     boot();
-  }, [displaySize, initialImage]);
+  }, [initialImage]);
 
   useEffect(() => {
     renderCanvas();
-  }, [displaySize, tool, color, size, opacity]);
+  }, [displaySize, tool, brushType, color, size, opacity]);
 
   useEffect(() => {
     onStatusChange?.({

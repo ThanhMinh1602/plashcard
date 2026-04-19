@@ -106,7 +106,7 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
             setLoading(false);
         }
     };
-
+const isBrushTool = activeToolbox.tool === 'brush';
     return (
         <div className="edit-card-page">
             <div className="edit-card-top">
@@ -143,23 +143,26 @@ export default function EditCard({ user, card, onBack, onCardSaved }) {
                         ↷ Redo
                     </button>
                 </div>
-                {activeToolbox.tool === 'brush' && (
-                    <div className="advanced-topbar-group tools-group">
-                        {BRUSH_TYPES.map((item) => (
-                            <button
-                                key={item.id}
-                                type="button"
-                                title={item.label}
-                                className={`tool-icon-btn compact ${activeToolbox.brushType === item.id ? 'active' : ''
-                                    }`}
-                                onClick={() => setActiveToolbox({ brushType: item.id })}
-                            >
-                                <span>{item.icon}</span>
-                                <small>{item.label}</small>
-                            </button>
-                        ))}
-                    </div>
-                )}
+                <div
+    className={`advanced-topbar-group tools-group brush-type-group ${isBrushTool ? 'open' : 'closed'}`}
+    aria-hidden={!isBrushTool}
+>
+    {BRUSH_TYPES.map((item, index) => (
+        <button
+            key={item.id}
+            type="button"
+            title={item.label}
+            className={`tool-icon-btn compact brush-type-btn ${activeToolbox.brushType === item.id ? 'active' : ''}`}
+            onClick={() => setActiveToolbox({ brushType: item.id })}
+            style={{ '--item-index': index }}
+            disabled={!isBrushTool}
+            tabIndex={isBrushTool ? 0 : -1}
+        >
+            <span>{item.icon}</span>
+            <small>{item.label}</small>
+        </button>
+    ))}
+</div>
                 <div className="advanced-topbar-group tools-group">
                     {TOOL_LIST.map((item) => (
                         <button
