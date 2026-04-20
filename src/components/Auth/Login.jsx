@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { auth } from '../../services/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import './Auth.css';
+import { FiArrowRight, FiLock, FiMail } from 'react-icons/fi';
+import { auth } from '../../services/firebase';
+import AuthShell from './AuthShell';
 
 export default function Login({ onSwitch, onForgot }) {
   const [email, setEmail] = useState('');
@@ -22,17 +23,19 @@ export default function Login({ onSwitch, onForgot }) {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-    } catch (error) {
+    } catch (err) {
       let errorMessage = 'Lỗi đăng nhập';
-      if (error.code === 'auth/user-not-found') {
+
+      if (err.code === 'auth/user-not-found') {
         errorMessage = 'Không tìm thấy tài khoản này';
-      } else if (error.code === 'auth/wrong-password') {
+      } else if (err.code === 'auth/wrong-password') {
         errorMessage = 'Mật khẩu không đúng';
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (err.code === 'auth/invalid-email') {
         errorMessage = 'Email không hợp lệ';
-      } else if (error.code === 'auth/too-many-requests') {
+      } else if (err.code === 'auth/too-many-requests') {
         errorMessage = 'Quá nhiều lần đăng nhập sai. Vui lòng thử lại sau';
       }
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -40,57 +43,81 @@ export default function Login({ onSwitch, onForgot }) {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1 className="auth-title">✨ Welcome</h1>
-          <p className="auth-subtitle">Đăng nhập vào Flashcard</p>
-        </div>
-
-        {error && <div className="error-message">{error}</div>}
-
-        <form onSubmit={handleLogin} className="auth-form">
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input 
-              id="email"
-              type="email" 
-              placeholder="your@email.com" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)} 
-              disabled={loading}
-              className="form-input"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password">Mật khẩu</label>
-            <input 
-              id="password"
-              type="password" 
-              placeholder="••••••••" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)} 
-              disabled={loading}
-              className="form-input"
-            />
-          </div>
-
-          <button type="submit" className="auth-button primary" disabled={loading}>
-            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+    <AuthShell
+      title="Welcome"
+      subtitle="Đăng nhập vào Flashcard"
+      footer={
+        <p>
+          Chưa có tài khoản?
+          <button
+            type="button"
+            onClick={onSwitch}
+            className="ml-2 font-semibold text-sky-600 transition hover:text-pink-500"
+          >
+            Đăng ký
           </button>
-        </form>
+        </p>
+      }
+    >
+      {error && <div className="status-error mb-5">{error}</div>}
 
-        <div className="auth-footer">
-          <p className="auth-link" onClick={onForgot}>
-            Quên mật khẩu?
-          </p>
-          <p>
-            Chưa có tài khoản? 
-            <span className="auth-link" onClick={onSwitch}>Đăng ký</span>
-          </p>
+      <form onSubmit={handleLogin} className="space-y-5">
+        <div className="space-y-2">
+          <label htmlFor="email" className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            Email
+          </label>
+          <div className="relative">
+            <FiMail className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              id="email"
+              type="email"
+              placeholder="your@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              className="soft-input pl-11"
+            />
+          </div>
         </div>
-      </div>
-    </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+              Mật khẩu
+            </label>
+
+            <button
+              type="button"
+              onClick={onForgot}
+              className="text-xs font-semibold text-sky-600 transition hover:text-pink-500"
+            >
+              Quên mật khẩu?
+            </button>
+          </div>
+
+          <div className="relative">
+            <FiLock className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              className="soft-input pl-11"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="soft-button gradient-strong h-12 w-full rounded-2xl text-sm font-bold hover:-translate-y-0.5"
+        >
+          <span>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</span>
+          {!loading && <FiArrowRight size={16} />}
+        </button>
+      </form>
+    </AuthShell>
   );
 }

@@ -6,7 +6,6 @@ import React, {
   useState,
 } from 'react';
 import { getStroke } from 'perfect-freehand';
-import './AdvancedCanvas.css';
 
 const DOC_WIDTH = 900;
 const DOC_HEIGHT = 1200;
@@ -823,11 +822,14 @@ function AdvancedCanvas(
   }, []);
 
   return (
-    <div className="advanced-editor" ref={containerRef}>
-      <div className="advanced-stage">
+    <div
+      className="flex h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white"
+      ref={containerRef}
+    >
+      <div className="relative h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white">
         <canvas
           ref={viewCanvasRef}
-          className="advanced-stage-canvas"
+          className="block h-full w-full cursor-crosshair select-none rounded-[inherit] bg-white [touch-action:none]"
           onPointerDown={beginInteraction}
           onPointerMove={moveInteraction}
           onPointerUp={endInteraction}

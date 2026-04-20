@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { auth } from '../../services/firebase';
 import { sendPasswordResetEmail } from 'firebase/auth';
-import './Auth.css';
+import { FiArrowLeft, FiMail, FiSend } from 'react-icons/fi';
+import { auth } from '../../services/firebase';
+import AuthShell from './AuthShell';
 
 export default function ForgotPassword({ onBack }) {
   const [email, setEmail] = useState('');
@@ -27,15 +28,17 @@ export default function ForgotPassword({ onBack }) {
       setTimeout(() => {
         onBack();
       }, 2000);
-    } catch (error) {
+    } catch (err) {
       let errorMessage = 'Lỗi gửi email';
-      if (error.code === 'auth/user-not-found') {
+
+      if (err.code === 'auth/user-not-found') {
         errorMessage = 'Không tìm thấy tài khoản với email này';
-      } else if (error.code === 'auth/invalid-email') {
+      } else if (err.code === 'auth/invalid-email') {
         errorMessage = 'Email không hợp lệ';
-      } else if (error.code === 'auth/too-many-requests') {
+      } else if (err.code === 'auth/too-many-requests') {
         errorMessage = 'Quá nhiều yêu cầu. Vui lòng thử lại sau';
       }
+
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -43,41 +46,51 @@ export default function ForgotPassword({ onBack }) {
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        <div className="auth-header">
-          <h1 className="auth-title">🔑 Khôi phục</h1>
-          <p className="auth-subtitle">Đặt lại mật khẩu của bạn</p>
-        </div>
+    <AuthShell
+      title="Khôi phục"
+      subtitle="Đặt lại mật khẩu của bạn"
+      footer={
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 font-semibold text-sky-600 transition hover:text-pink-500"
+        >
+          <FiArrowLeft size={14} />
+          <span>Quay lại đăng nhập</span>
+        </button>
+      }
+    >
+      {error && <div className="status-error mb-5">{error}</div>}
+      {success && <div className="status-success mb-5">{success}</div>}
 
-        {error && <div className="error-message">{error}</div>}
-        {success && <div className="success-message">{success}</div>}
-
-        <form onSubmit={handleReset} className="auth-form">
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input 
+      <form onSubmit={handleReset} className="space-y-5">
+        <div className="space-y-2">
+          <label htmlFor="email" className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+            Email
+          </label>
+          <div className="relative">
+            <FiMail className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
               id="email"
-              type="email" 
-              placeholder="your@email.com" 
+              type="email"
+              placeholder="your@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
-              className="form-input"
+              className="soft-input pl-11"
             />
           </div>
-
-          <button type="submit" className="auth-button primary" disabled={loading}>
-            {loading ? 'Đang gửi...' : 'Gửi email reset'}
-          </button>
-        </form>
-
-        <div className="auth-footer">
-          <p className="auth-link" onClick={onBack}>
-            ← Quay lại đăng nhập
-          </p>
         </div>
-      </div>
-    </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="soft-button gradient-strong h-12 w-full rounded-2xl text-sm font-bold hover:-translate-y-0.5"
+        >
+          <span>{loading ? 'Đang gửi...' : 'Gửi email reset'}</span>
+          {!loading && <FiSend size={16} />}
+        </button>
+      </form>
+    </AuthShell>
   );
 }
