@@ -5,12 +5,105 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { getStroke } from 'perfect-freehand';
+import { Stage, Layer, Group, Rect, Line, Circle, Image as KonvaImage } from 'react-konva';
 
 const DOC_WIDTH = 900;
 const DOC_HEIGHT = 1200;
 
+const deepClone = (value) => JSON.parse(JSON.stringify(value));
+
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const makeId = () =>
+  `shape-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+const getContainRect = (displayWidth, displayHeight) => {
+  if (!displayWidth || !displayHeight) {
+    return {
+      scale: 1,
+      drawWidth: 0,
+      drawHeight: 0,
+      offsetX: 0,
+      offsetY: 0,
+    };
+  }
+
+  const scale = Math.min(displayWidth / DOC_WIDTH, displayHeight / DOC_HEIGHT);
+  const drawWidth = DOC_WIDTH * scale;
+  const drawHeight = DOC_HEIGHT * scale;
+  const offsetX = (displayWidth - drawWidth) / 2;
+  const offsetY = (displayHeight - drawHeight) / 2;
+
+  return {
+    scale,
+    drawWidth,
+    drawHeight,
+    offsetX,
+    offsetY,
+  };
+};
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+const getBrushStyle = (brushType, baseSize, baseOpacity, color, tool) => {
+  const isEraser = tool === 'eraser';
+
+  if (isEraser) {
+    return {
+      stroke: '#000000',
+      strokeWidth: Math.max(6, baseSize * 1.25),
+      opacity: 1,
+      tension: 0.12,
+      compositeOperation: 'destination-out',
+    };
+  }
+
+  switch (brushType) {
+    case 'pencil':
+      return {
+        stroke: color,
+        strokeWidth: Math.max(1, baseSize * 0.95),
+        opacity: Math.min(1, baseOpacity * 0.62),
+        tension: 0.08,
+        compositeOperation: 'source-over',
+      };
+
+    case 'marker':
+      return {
+        stroke: color,
+        strokeWidth: Math.max(2, baseSize * 1.45),
+        opacity: Math.min(1, baseOpacity * 0.34),
+        tension: 0.2,
+        compositeOperation: 'source-over',
+      };
+
+    case 'calligraphy':
+      return {
+        stroke: color,
+        strokeWidth: Math.max(2, baseSize * 1.12),
+        opacity: baseOpacity,
+        tension: 0.18,
+        compositeOperation: 'source-over',
+      };
+
+    case 'pen':
+    default:
+      return {
+        stroke: color,
+        strokeWidth: Math.max(1, baseSize),
+        opacity: baseOpacity,
+        tension: 0.16,
+        compositeOperation: 'source-over',
+      };
+  }
+};
 
 function AdvancedCanvas(
   {
@@ -26,734 +119,85 @@ function AdvancedCanvas(
   ref
 ) {
   const containerRef = useRef(null);
-  const viewCanvasRef = useRef(null);
-  const contentCanvasRef = useRef(null);
-  const activePointerIdRef = useRef(null);
-  const onStatusChangeRef = useRef(onStatusChange);
-
+  const stageRef = useRef(null);
+  const docGroupRef = useRef(null);
   const historyRef = useRef([]);
   const historyStepRef = useRef(-1);
-  const interactionRef = useRef(null);
-  const docSizeRef = useRef({ width: DOC_WIDTH, height: DOC_HEIGHT });
+  const onStatusChangeRef = useRef(onStatusChange);
+  const initializedRef = useRef(false);
+  const drawingRef = useRef(null);
+  const snapshotRef = useRef({
+    elements: [],
+    backgroundSrc: initialImage || '',
+  });
 
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
+  const [snapshot, setSnapshot] = useState({
+    elements: [],
+    backgroundSrc: initialImage || '',
+  });
+  const [backgroundImage, setBackgroundImage] = useState(null);
+  const [draftShape, setDraftShape] = useState(null);
   const [historyStep, setHistoryStep] = useState(0);
   const [historyLength, setHistoryLength] = useState(1);
 
-  const createOffscreenCanvas = (width, height) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
 
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.clearRect(0, 0, width, height);
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
 
-    return canvas;
-  };
+  useEffect(() => {
+    onStatusChangeRef.current?.({
+      canUndo: historyStep > 0,
+      canRedo: historyStep < historyLength - 1,
+    });
+  }, [historyStep, historyLength]);
 
-  const getContentCanvas = () => contentCanvasRef.current;
+  useEffect(() => {
+    let cancelled = false;
 
-  const getPointerPressure = (e) => {
-    const p = typeof e?.pressure === 'number' ? e.pressure : 0.5;
-    return p > 0 ? p : 0.5;
-  };
+    if (!snapshot.backgroundSrc) {
+      setBackgroundImage(null);
+      return;
+    }
 
-  const loadImageToCanvas = (canvas, src, mode = 'stretch') =>
-    new Promise((resolve) => {
-      if (!src || !canvas) {
-        resolve();
-        return;
+    const img = new window.Image();
+    img.onload = () => {
+      if (!cancelled) {
+        setBackgroundImage(img);
       }
+    };
+    img.onerror = () => {
+      if (!cancelled) {
+        setBackgroundImage(null);
+      }
+    };
+    img.src = snapshot.backgroundSrc;
 
-      const img = new Image();
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshot.backgroundSrc]);
 
-      img.onload = () => {
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
-        if (mode === 'contain') {
-          const scale = Math.min(
-            canvas.width / img.width,
-            canvas.height / img.height
-          );
-          const drawWidth = img.width * scale;
-          const drawHeight = img.height * scale;
-          const dx = (canvas.width - drawWidth) / 2;
-          const dy = (canvas.height - drawHeight) / 2;
-          ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
-        } else {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        }
-
-        resolve();
-      };
-
-      img.onerror = () => resolve();
-      img.src = src;
+    const initialSnapshot = deepClone({
+      elements: [],
+      backgroundSrc: initialImage || '',
     });
 
-  const buildExportCanvas = () => {
-    const { width, height } = docSizeRef.current;
-    const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = width;
-    exportCanvas.height = height;
-
-    const ctx = exportCanvas.getContext('2d', { willReadFrequently: true });
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, width, height);
-
-    const contentCanvas = getContentCanvas();
-    if (contentCanvas) {
-      ctx.drawImage(contentCanvas, 0, 0, width, height);
-    }
-
-    return exportCanvas;
-  };
-
-  const exportComposite = () => buildExportCanvas().toDataURL('image/png');
-
-  const getClientPoint = (e) => {
-    const source =
-      e?.nativeEvent?.changedTouches?.[0] ||
-      e?.changedTouches?.[0] ||
-      e?.nativeEvent?.touches?.[0] ||
-      e?.touches?.[0] ||
-      e;
-
-    return {
-      clientX: source?.clientX ?? 0,
-      clientY: source?.clientY ?? 0,
-    };
-  };
-
-  const getContainRect = () => {
-    const { width: docWidth, height: docHeight } = docSizeRef.current;
-    const { width: displayWidth, height: displayHeight } = displaySize;
-
-    if (!docWidth || !docHeight || !displayWidth || !displayHeight) {
-      return {
-        scale: 1,
-        drawWidth: 0,
-        drawHeight: 0,
-        offsetX: 0,
-        offsetY: 0,
-      };
-    }
-
-    const scale = Math.min(displayWidth / docWidth, displayHeight / docHeight);
-    const drawWidth = docWidth * scale;
-    const drawHeight = docHeight * scale;
-    const offsetX = (displayWidth - drawWidth) / 2;
-    const offsetY = (displayHeight - drawHeight) / 2;
-
-    return { scale, drawWidth, drawHeight, offsetX, offsetY };
-  };
-
-  const toDocPoint = (e) => {
-    const canvas = viewCanvasRef.current;
-    const { width: docWidth, height: docHeight } = docSizeRef.current;
-
-    if (
-      !canvas ||
-      !docWidth ||
-      !docHeight ||
-      !displaySize.width ||
-      !displaySize.height
-    ) {
-      return { x: 0, y: 0, clientX: 0, clientY: 0 };
-    }
-
-    const rect = canvas.getBoundingClientRect();
-    const { clientX, clientY } = getClientPoint(e);
-    const { drawWidth, drawHeight, offsetX, offsetY } = getContainRect();
-
-    if (!drawWidth || !drawHeight) {
-      return { x: 0, y: 0, clientX, clientY };
-    }
-
-    const localX = clientX - rect.left - offsetX;
-    const localY = clientY - rect.top - offsetY;
-
-    const rx = clamp(localX / drawWidth, 0, 1);
-    const ry = clamp(localY / drawHeight, 0, 1);
-
-    return {
-      x: rx * docWidth,
-      y: ry * docHeight,
-      clientX,
-      clientY,
-    };
-  };
-
-  const docToDisplayPoint = (point) => {
-    const { scale, offsetX, offsetY } = getContainRect();
-
-    return {
-      x: offsetX + point.x * scale,
-      y: offsetY + point.y * scale,
-    };
-  };
-
-  const releasePointer = () => {
-    const pointerId = activePointerIdRef.current;
-
-    if (pointerId != null) {
-      try {
-        viewCanvasRef.current?.releasePointerCapture?.(pointerId);
-      } catch {
-        // ignore
-      }
-    }
-
-    activePointerIdRef.current = null;
-  };
-
-  const buildSnapshot = () => ({
-    dataUrl: getContentCanvas()?.toDataURL('image/png') || '',
-  });
-
-  const commitHistory = () => {
-    const snapshot = buildSnapshot();
-    const nextHistory = historyRef.current.slice(0, historyStepRef.current + 1);
-
-    nextHistory.push(snapshot);
-    historyRef.current = nextHistory;
-    historyStepRef.current = nextHistory.length - 1;
-
-    setHistoryLength(nextHistory.length);
-    setHistoryStep(historyStepRef.current);
-  };
-
-  const restoreSnapshot = async (snapshot) => {
-    const contentCanvas = createOffscreenCanvas(
-      docSizeRef.current.width,
-      docSizeRef.current.height
-    );
-
-    await loadImageToCanvas(contentCanvas, snapshot.dataUrl, 'stretch');
-    contentCanvasRef.current = contentCanvas;
-
-    requestAnimationFrame(() => {
-      renderCanvas();
-    });
-  };
-
-  const undo = async () => {
-    if (historyStepRef.current <= 0) return;
-    historyStepRef.current -= 1;
-    setHistoryStep(historyStepRef.current);
-    await restoreSnapshot(historyRef.current[historyStepRef.current]);
-  };
-
-  const redo = async () => {
-    if (historyStepRef.current >= historyRef.current.length - 1) return;
-    historyStepRef.current += 1;
-    setHistoryStep(historyStepRef.current);
-    await restoreSnapshot(historyRef.current[historyStepRef.current]);
-  };
-
-  const getBrushStrokeOptions = (currentBrushType, currentSize, isComplete = false) => {
-    switch (currentBrushType) {
-      case 'pen':
-        return {
-          size: currentSize,
-          thinning: 0.55,
-          smoothing: 0.62,
-          streamline: 0.42,
-          simulatePressure: false,
-          last: isComplete,
-        };
-
-      case 'pencil':
-        return {
-          size: Math.max(1, currentSize * 0.9),
-          thinning: 0.2,
-          smoothing: 0.35,
-          streamline: 0.18,
-          simulatePressure: false,
-          last: isComplete,
-          start: { taper: currentSize * 0.4, cap: true },
-          end: { taper: currentSize * 0.6, cap: true },
-        };
-
-      case 'marker':
-        return {
-          size: currentSize * 1.45,
-          thinning: 0.08,
-          smoothing: 0.72,
-          streamline: 0.55,
-          simulatePressure: false,
-          last: isComplete,
-        };
-
-      case 'calligraphy':
-        return {
-          size: currentSize * 1.08,
-          thinning: -0.12,
-          smoothing: 0.78,
-          streamline: 0.6,
-          simulatePressure: false,
-          last: isComplete,
-          start: { taper: currentSize * 0.8, cap: true },
-          end: { taper: currentSize * 1.2, cap: true },
-        };
-
-      default:
-        return {
-          size: currentSize,
-          thinning: 0.5,
-          smoothing: 0.5,
-          streamline: 0.5,
-          simulatePressure: false,
-          last: isComplete,
-        };
-    }
-  };
-
-  const buildStrokePath = (outlinePoints) => {
-    const path = new Path2D();
-
-    if (!outlinePoints?.length) return path;
-
-    path.moveTo(outlinePoints[0][0], outlinePoints[0][1]);
-
-    for (let i = 1; i < outlinePoints.length; i += 1) {
-      path.lineTo(outlinePoints[i][0], outlinePoints[i][1]);
-    }
-
-    path.closePath();
-    return path;
-  };
-
-  const drawPerfectFreehandStroke = ({
-    ctx,
-    points,
-    currentBrushType,
-    currentColor,
-    currentOpacity,
-    currentSize,
-    isComplete,
-  }) => {
-    if (!points?.length) return;
-
-    const outline = getStroke(
-      points,
-      getBrushStrokeOptions(currentBrushType, currentSize, isComplete)
-    );
-
-    if (!outline.length) return;
-
-    const path = buildStrokePath(outline);
-
-    ctx.save();
-
-    if (currentBrushType === 'pencil') {
-      ctx.globalAlpha = currentOpacity * 0.55;
-    } else if (currentBrushType === 'marker') {
-      ctx.globalAlpha = currentOpacity * 0.28;
-    } else {
-      ctx.globalAlpha = currentOpacity;
-    }
-
-    ctx.fillStyle = currentColor;
-    ctx.fill(path);
-
-    if (currentBrushType === 'pencil') {
-      const bounds = points.reduce(
-        (acc, p) => ({
-          minX: Math.min(acc.minX, p[0]),
-          maxX: Math.max(acc.maxX, p[0]),
-          minY: Math.min(acc.minY, p[1]),
-          maxY: Math.max(acc.maxY, p[1]),
-        }),
-        {
-          minX: Infinity,
-          maxX: -Infinity,
-          minY: Infinity,
-          maxY: -Infinity,
-        }
-      );
-
-      const density = Math.max(
-        12,
-        Math.floor(
-          (bounds.maxX - bounds.minX + (bounds.maxY - bounds.minY)) * 0.08
-        )
-      );
-
-      ctx.save();
-      ctx.clip(path);
-
-      for (let i = 0; i < density; i += 1) {
-        const x = bounds.minX + Math.random() * Math.max(1, bounds.maxX - bounds.minX);
-        const y = bounds.minY + Math.random() * Math.max(1, bounds.maxY - bounds.minY);
-        const r = Math.max(0.35, currentSize * 0.06 * Math.random());
-
-        ctx.beginPath();
-        ctx.globalAlpha = currentOpacity * (0.05 + Math.random() * 0.08);
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.restore();
-    }
-
-    ctx.restore();
-  };
-
-  const drawEraserStroke = (canvas, from, to) => {
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-    ctx.save();
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = size;
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = 'rgba(0,0,0,1)';
-
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(to.x, to.y, size / 2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,1)';
-    ctx.fill();
-
-    ctx.restore();
-  };
-
-  const renderCanvas = (preview = null) => {
-    const canvas = viewCanvasRef.current;
-    const contentCanvas = getContentCanvas();
-
-    if (!canvas || !contentCanvas || !displaySize.width || !displaySize.height) {
-      return;
-    }
-
-    const dpr = window.devicePixelRatio || 1;
-    const pixelWidth = Math.max(1, Math.floor(displaySize.width * dpr));
-    const pixelHeight = Math.max(1, Math.floor(displaySize.height * dpr));
-
-    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-      canvas.width = pixelWidth;
-      canvas.height = pixelHeight;
-      canvas.style.width = `${displaySize.width}px`;
-      canvas.style.height = `${displaySize.height}px`;
-    }
-
-    const ctx = canvas.getContext('2d');
-    const { scale, drawWidth, drawHeight, offsetX, offsetY } = getContainRect();
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, displaySize.width, displaySize.height);
-
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, displaySize.width, displaySize.height);
-
-    ctx.drawImage(contentCanvas, offsetX, offsetY, drawWidth, drawHeight);
-
-    if (!preview) return;
-
-    if (preview.tool === 'freehand') {
-      ctx.save();
-      ctx.translate(offsetX, offsetY);
-      ctx.scale(scale, scale);
-
-      drawPerfectFreehandStroke({
-        ctx,
-        points: preview.points,
-        currentBrushType: preview.brushType,
-        currentColor: preview.color,
-        currentOpacity: preview.opacity,
-        currentSize: preview.size,
-        isComplete: false,
-      });
-
-      ctx.restore();
-      return;
-    }
-
-    const start = docToDisplayPoint(preview.start);
-    const current = docToDisplayPoint(preview.current);
-
-    ctx.save();
-    ctx.strokeStyle = preview.color;
-    ctx.fillStyle = preview.color;
-    ctx.globalAlpha = preview.opacity;
-    ctx.lineWidth = Math.max(1, preview.size * scale);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    if (preview.tool === 'line') {
-      ctx.beginPath();
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(current.x, current.y);
-      ctx.stroke();
-    } else if (preview.tool === 'rectangle') {
-      ctx.strokeRect(
-        start.x,
-        start.y,
-        current.x - start.x,
-        current.y - start.y
-      );
-    } else if (preview.tool === 'circle') {
-      const radius = Math.sqrt(
-        Math.pow(current.x - start.x, 2) +
-          Math.pow(current.y - start.y, 2)
-      );
-      ctx.beginPath();
-      ctx.arc(start.x, start.y, radius, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  };
-
-  const beginInteraction = (e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    if (typeof e.isPrimary === 'boolean' && !e.isPrimary) return;
-
-    e.preventDefault();
-    const point = toDocPoint(e);
-    const canvas = getContentCanvas();
-
-    if (!canvas) return;
-
-    activePointerIdRef.current = e.pointerId ?? null;
-    viewCanvasRef.current?.setPointerCapture?.(e.pointerId);
-
-    const pressure = getPointerPressure(e);
-
-    interactionRef.current = {
-      mode: 'draw',
-      tool,
-      start: { x: point.x, y: point.y },
-      last: { x: point.x, y: point.y },
-      points: [[point.x, point.y, pressure]],
-    };
-
-    if (tool === 'eraser') {
-      drawEraserStroke(canvas, point, point);
-      renderCanvas();
-      return;
-    }
-
-    if (tool === 'brush') {
-      renderCanvas({
-        tool: 'freehand',
-        points: interactionRef.current.points,
-        brushType,
-        color,
-        size,
-        opacity,
-      });
-    }
-  };
-
-  const moveInteraction = (e) => {
-    if (!interactionRef.current) return;
-
-    if (
-      activePointerIdRef.current != null &&
-      e.pointerId != null &&
-      e.pointerId !== activePointerIdRef.current
-    ) {
-      return;
-    }
-
-    e.preventDefault();
-    const current = toDocPoint(e);
-
-    const canvas = getContentCanvas();
-    if (!canvas) return;
-
-    const currentTool = interactionRef.current.tool;
-
-    if (currentTool === 'eraser') {
-      drawEraserStroke(canvas, interactionRef.current.last, current);
-      interactionRef.current.last = { x: current.x, y: current.y };
-      renderCanvas();
-      return;
-    }
-
-    if (currentTool === 'brush') {
-      const lastPoint =
-        interactionRef.current.points[interactionRef.current.points.length - 1];
-
-      const dist = Math.hypot(current.x - lastPoint[0], current.y - lastPoint[1]);
-
-      if (dist < 0.6) return;
-
-      interactionRef.current.points.push([
-        current.x,
-        current.y,
-        getPointerPressure(e),
-      ]);
-
-      interactionRef.current.last = { x: current.x, y: current.y };
-
-      renderCanvas({
-        tool: 'freehand',
-        points: interactionRef.current.points,
-        brushType,
-        color,
-        size,
-        opacity,
-      });
-      return;
-    }
-
-    renderCanvas({
-      tool: currentTool,
-      start: interactionRef.current.start,
-      current,
-      color,
-      size,
-      opacity,
-    });
-  };
-
-  const endInteraction = (e) => {
-    if (
-      activePointerIdRef.current != null &&
-      e.pointerId != null &&
-      e.pointerId !== activePointerIdRef.current
-    ) {
-      return;
-    }
-
-    if (!interactionRef.current) {
-      releasePointer();
-      return;
-    }
-
-    e.preventDefault();
-    const current = toDocPoint(e);
-    const currentTool = interactionRef.current.tool;
-    const canvas = getContentCanvas();
-
-    if (!canvas) {
-      interactionRef.current = null;
-      releasePointer();
-      return;
-    }
-
-    if (currentTool === 'brush') {
-      const last =
-        interactionRef.current.points[interactionRef.current.points.length - 1];
-      const finalPressure = getPointerPressure(e);
-
-      if (!last || last[0] !== current.x || last[1] !== current.y) {
-        interactionRef.current.points.push([current.x, current.y, finalPressure]);
-      }
-
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-      drawPerfectFreehandStroke({
-        ctx,
-        points: interactionRef.current.points,
-        currentBrushType: brushType,
-        currentColor: color,
-        currentOpacity: opacity,
-        currentSize: size,
-        isComplete: true,
-      });
-
-      interactionRef.current = null;
-      releasePointer();
-      renderCanvas();
-      commitHistory();
-      return;
-    }
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.save();
-    ctx.globalAlpha = opacity;
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    if (currentTool === 'line') {
-      ctx.beginPath();
-      ctx.moveTo(interactionRef.current.start.x, interactionRef.current.start.y);
-      ctx.lineTo(current.x, current.y);
-      ctx.stroke();
-    } else if (currentTool === 'rectangle') {
-      ctx.strokeRect(
-        interactionRef.current.start.x,
-        interactionRef.current.start.y,
-        current.x - interactionRef.current.start.x,
-        current.y - interactionRef.current.start.y
-      );
-    } else if (currentTool === 'circle') {
-      const radius = Math.sqrt(
-        Math.pow(current.x - interactionRef.current.start.x, 2) +
-          Math.pow(current.y - interactionRef.current.start.y, 2)
-      );
-
-      ctx.beginPath();
-      ctx.arc(
-        interactionRef.current.start.x,
-        interactionRef.current.start.y,
-        radius,
-        0,
-        Math.PI * 2
-      );
-      ctx.stroke();
-    }
-
-    ctx.restore();
-
-    interactionRef.current = null;
-    releasePointer();
-    renderCanvas();
-    commitHistory();
-  };
-
-  const clearCanvas = () => {
-    const canvas = getContentCanvas();
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    renderCanvas();
-    commitHistory();
-  };
-
-  const importImageFile = async (file) => {
-    if (!file) return;
-    const canvas = getContentCanvas();
-    if (!canvas) return;
-
-    const url = URL.createObjectURL(file);
-    await loadImageToCanvas(canvas, url, 'contain');
-    URL.revokeObjectURL(url);
-
-    renderCanvas();
-    commitHistory();
-  };
-
-  const exportImage = () => {
-    const link = document.createElement('a');
-    link.download = 'flashcard-face.png';
-    link.href = exportComposite();
-    link.click();
-  };
-
-  useImperativeHandle(ref, () => ({
-    toDataURL: () => exportComposite(),
-    undo,
-    redo,
-    clear: clearCanvas,
-    importImageFile,
-    exportImage,
-  }));
+    snapshotRef.current = initialSnapshot;
+    setSnapshot(initialSnapshot);
+    historyRef.current = [initialSnapshot];
+    historyStepRef.current = 0;
+    setHistoryStep(0);
+    setHistoryLength(1);
+  }, [initialImage]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -780,62 +224,475 @@ function AdvancedCanvas(
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    if (contentCanvasRef.current) return;
+  const commitHistory = (nextSnapshot) => {
+    const safeSnapshot = deepClone(nextSnapshot);
+    const nextHistory = historyRef.current.slice(0, historyStepRef.current + 1);
 
-    contentCanvasRef.current = createOffscreenCanvas(DOC_WIDTH, DOC_HEIGHT);
+    nextHistory.push(safeSnapshot);
+    historyRef.current = nextHistory;
+    historyStepRef.current = nextHistory.length - 1;
 
-    const boot = async () => {
-      if (initialImage) {
-        await loadImageToCanvas(contentCanvasRef.current, initialImage, 'contain');
-      }
+    snapshotRef.current = safeSnapshot;
+    setSnapshot(safeSnapshot);
+    setHistoryStep(historyStepRef.current);
+    setHistoryLength(nextHistory.length);
+  };
 
-      historyRef.current = [];
-      historyStepRef.current = -1;
-      commitHistory();
+  const restoreHistory = (nextIndex) => {
+    const item = historyRef.current[nextIndex];
+    if (!item) return;
 
-      requestAnimationFrame(() => {
-        renderCanvas();
+    const safeSnapshot = deepClone(item);
+    historyStepRef.current = nextIndex;
+    snapshotRef.current = safeSnapshot;
+    setSnapshot(safeSnapshot);
+    setDraftShape(null);
+    setHistoryStep(nextIndex);
+    setHistoryLength(historyRef.current.length);
+  };
+
+  const undo = () => {
+    if (historyStepRef.current <= 0) return;
+    restoreHistory(historyStepRef.current - 1);
+  };
+
+  const redo = () => {
+    if (historyStepRef.current >= historyRef.current.length - 1) return;
+    restoreHistory(historyStepRef.current + 1);
+  };
+
+  const clearCanvas = () => {
+    const nextSnapshot = {
+      elements: [],
+      backgroundSrc: '',
+    };
+    setDraftShape(null);
+    commitHistory(nextSnapshot);
+  };
+
+  const getDocPointFromStage = () => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+
+    const pos = stage.getPointerPosition();
+    if (!pos) return null;
+
+    const { scale, offsetX, offsetY } = getContainRect(
+      displaySize.width,
+      displaySize.height
+    );
+
+    const x = clamp((pos.x - offsetX) / scale, 0, DOC_WIDTH);
+    const y = clamp((pos.y - offsetY) / scale, 0, DOC_HEIGHT);
+
+    return { x, y };
+  };
+
+  const shouldStartDrawing = (konvaEvent) => {
+    const evt = konvaEvent?.evt;
+    if (!evt) return false;
+
+    if (typeof evt.isPrimary === 'boolean' && !evt.isPrimary) {
+      return false;
+    }
+
+    if (evt.pointerType === 'mouse' && evt.button !== 0) {
+      return false;
+    }
+
+    // Tối ưu cho iPad + bút: bỏ finger draw để tránh chạm nhầm bằng tay.
+    // Pen và mouse vẫn hoạt động.
+    if (evt.pointerType === 'touch') {
+      return false;
+    }
+
+    return true;
+  };
+
+  const handlePointerDown = (e) => {
+    if (!shouldStartDrawing(e)) return;
+
+    const point = getDocPointFromStage();
+    if (!point) return;
+
+    const evt = e.evt;
+    if (evt.cancelable) evt.preventDefault();
+
+    if (tool === 'brush' || tool === 'eraser') {
+      const pressure =
+        typeof evt.pressure === 'number' && evt.pressure > 0 ? evt.pressure : 0.5;
+
+      const nextDraft = {
+        id: makeId(),
+        kind: 'freehand',
+        tool,
+        brushType,
+        color,
+        size,
+        opacity,
+        points: [point.x, point.y, point.x + 0.01, point.y + 0.01],
+        pressures: [pressure],
+      };
+
+      drawingRef.current = {
+        kind: 'freehand',
+      };
+      setDraftShape(nextDraft);
+      return;
+    }
+
+    if (tool === 'line') {
+      const nextDraft = {
+        id: makeId(),
+        kind: 'line',
+        color,
+        size,
+        opacity,
+        points: [point.x, point.y, point.x, point.y],
+      };
+
+      drawingRef.current = {
+        kind: 'line',
+        startX: point.x,
+        startY: point.y,
+      };
+      setDraftShape(nextDraft);
+      return;
+    }
+
+    if (tool === 'rectangle') {
+      const nextDraft = {
+        id: makeId(),
+        kind: 'rectangle',
+        color,
+        size,
+        opacity,
+        x: point.x,
+        y: point.y,
+        width: 0,
+        height: 0,
+      };
+
+      drawingRef.current = {
+        kind: 'rectangle',
+        startX: point.x,
+        startY: point.y,
+      };
+      setDraftShape(nextDraft);
+      return;
+    }
+
+    if (tool === 'circle') {
+      const nextDraft = {
+        id: makeId(),
+        kind: 'circle',
+        color,
+        size,
+        opacity,
+        x: point.x,
+        y: point.y,
+        radius: 0,
+      };
+
+      drawingRef.current = {
+        kind: 'circle',
+        startX: point.x,
+        startY: point.y,
+      };
+      setDraftShape(nextDraft);
+    }
+  };
+
+  const handlePointerMove = (e) => {
+    if (!drawingRef.current || !draftShape) return;
+
+    const point = getDocPointFromStage();
+    if (!point) return;
+
+    const evt = e.evt;
+    if (evt.cancelable) evt.preventDefault();
+
+    if (drawingRef.current.kind === 'freehand') {
+      const pressure =
+        typeof evt.pressure === 'number' && evt.pressure > 0 ? evt.pressure : 0.5;
+
+      setDraftShape((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          points: [...prev.points, point.x, point.y],
+          pressures: [...(prev.pressures || []), pressure],
+        };
       });
+      return;
+    }
+
+    if (drawingRef.current.kind === 'line') {
+      setDraftShape((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          points: [
+            drawingRef.current.startX,
+            drawingRef.current.startY,
+            point.x,
+            point.y,
+          ],
+        };
+      });
+      return;
+    }
+
+    if (drawingRef.current.kind === 'rectangle') {
+      setDraftShape((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          x: drawingRef.current.startX,
+          y: drawingRef.current.startY,
+          width: point.x - drawingRef.current.startX,
+          height: point.y - drawingRef.current.startY,
+        };
+      });
+      return;
+    }
+
+    if (drawingRef.current.kind === 'circle') {
+      const radius = Math.sqrt(
+        Math.pow(point.x - drawingRef.current.startX, 2) +
+          Math.pow(point.y - drawingRef.current.startY, 2)
+      );
+
+      setDraftShape((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          x: drawingRef.current.startX,
+          y: drawingRef.current.startY,
+          radius,
+        };
+      });
+    }
+  };
+
+  const handlePointerUp = (e) => {
+    if (!drawingRef.current || !draftShape) return;
+
+    const evt = e.evt;
+    if (evt?.cancelable) evt.preventDefault();
+
+    const nextSnapshot = {
+      ...snapshotRef.current,
+      elements: [...snapshotRef.current.elements, deepClone(draftShape)],
     };
 
-    boot();
-  }, [initialImage]);
+    drawingRef.current = null;
+    setDraftShape(null);
+    commitHistory(nextSnapshot);
+  };
 
-  useEffect(() => {
-    renderCanvas();
-  }, [displaySize, tool, brushType, color, size, opacity, backgroundColor]);
+  const importImageFile = async (file) => {
+    if (!file) return;
+    const dataUrl = await readFileAsDataUrl(file);
 
-  useEffect(() => {
-    onStatusChangeRef.current = onStatusChange;
-  }, [onStatusChange]);
+    const nextSnapshot = {
+      ...snapshotRef.current,
+      backgroundSrc: dataUrl,
+    };
 
-  useEffect(() => {
-    onStatusChangeRef.current?.({
-      canUndo: historyStep > 0,
-      canRedo: historyStep < historyLength - 1,
+    setDraftShape(null);
+    commitHistory(nextSnapshot);
+  };
+
+  const exportComposite = () => {
+    const group = docGroupRef.current;
+    if (!group || !displaySize.width || !displaySize.height) {
+      return '';
+    }
+
+    const { drawWidth } = getContainRect(displaySize.width, displaySize.height);
+    const pixelRatio = drawWidth ? DOC_WIDTH / drawWidth : 1;
+
+    return group.toDataURL({
+      pixelRatio,
     });
-  }, [historyStep, historyLength]);
+  };
 
-  useEffect(() => {
-    return () => releasePointer();
-  }, []);
+  const exportImage = () => {
+    const dataUrl = exportComposite();
+    if (!dataUrl) return;
+
+    const link = document.createElement('a');
+    link.download = 'flashcard-face.png';
+    link.href = dataUrl;
+    link.click();
+  };
+
+  useImperativeHandle(ref, () => ({
+    toDataURL: () => exportComposite(),
+    undo,
+    redo,
+    clear: clearCanvas,
+    importImageFile,
+    exportImage,
+  }));
+
+  const renderShape = (shape) => {
+    if (!shape) return null;
+
+    if (shape.kind === 'freehand') {
+      const brush = getBrushStyle(
+        shape.brushType,
+        shape.size,
+        shape.opacity,
+        shape.color,
+        shape.tool
+      );
+
+      return (
+        <Line
+          key={shape.id}
+          points={shape.points}
+          stroke={brush.stroke}
+          strokeWidth={brush.strokeWidth}
+          opacity={brush.opacity}
+          lineCap="round"
+          lineJoin="round"
+          tension={brush.tension}
+          globalCompositeOperation={brush.compositeOperation}
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      );
+    }
+
+    if (shape.kind === 'line') {
+      return (
+        <Line
+          key={shape.id}
+          points={shape.points}
+          stroke={shape.color}
+          strokeWidth={shape.size}
+          opacity={shape.opacity}
+          lineCap="round"
+          lineJoin="round"
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      );
+    }
+
+    if (shape.kind === 'rectangle') {
+      return (
+        <Rect
+          key={shape.id}
+          x={shape.x}
+          y={shape.y}
+          width={shape.width}
+          height={shape.height}
+          stroke={shape.color}
+          strokeWidth={shape.size}
+          opacity={shape.opacity}
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      );
+    }
+
+    if (shape.kind === 'circle') {
+      return (
+        <Circle
+          key={shape.id}
+          x={shape.x}
+          y={shape.y}
+          radius={shape.radius}
+          stroke={shape.color}
+          strokeWidth={shape.size}
+          opacity={shape.opacity}
+          listening={false}
+          perfectDrawEnabled={false}
+        />
+      );
+    }
+
+    return null;
+  };
+
+  const { scale, offsetX, offsetY } = getContainRect(
+    displaySize.width,
+    displaySize.height
+  );
+
+  const imageLayout = (() => {
+    if (!backgroundImage) return null;
+
+    const imageWidth = backgroundImage.width || DOC_WIDTH;
+    const imageHeight = backgroundImage.height || DOC_HEIGHT;
+    const fitScale = Math.min(DOC_WIDTH / imageWidth, DOC_HEIGHT / imageHeight);
+    const width = imageWidth * fitScale;
+    const height = imageHeight * fitScale;
+
+    return {
+      x: (DOC_WIDTH - width) / 2,
+      y: (DOC_HEIGHT - height) / 2,
+      width,
+      height,
+    };
+  })();
 
   return (
     <div
-      className="flex h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white"
       ref={containerRef}
+      className="flex h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white"
+      style={{ touchAction: 'none' }}
     >
       <div className="relative h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white">
-        <canvas
-          ref={viewCanvasRef}
-          className="block h-full w-full cursor-crosshair select-none rounded-[inherit] bg-white [touch-action:none]"
-          onPointerDown={beginInteraction}
-          onPointerMove={moveInteraction}
-          onPointerUp={endInteraction}
-          onPointerCancel={endInteraction}
-          onContextMenu={(e) => e.preventDefault()}
-        />
+        {displaySize.width > 0 && displaySize.height > 0 && (
+          <Stage
+            ref={stageRef}
+            width={displaySize.width}
+            height={displaySize.height}
+            className="h-full w-full bg-white"
+            onPointerdown={handlePointerDown}
+            onPointermove={handlePointerMove}
+            onPointerup={handlePointerUp}
+            onPointercancel={handlePointerUp}
+            onContextMenu={(e) => e.evt.preventDefault()}
+          >
+            <Layer>
+              <Group
+                ref={docGroupRef}
+                x={offsetX}
+                y={offsetY}
+                scaleX={scale}
+                scaleY={scale}
+              >
+                <Rect
+                  x={0}
+                  y={0}
+                  width={DOC_WIDTH}
+                  height={DOC_HEIGHT}
+                  fill={backgroundColor}
+                  listening={false}
+                />
+
+                {backgroundImage && imageLayout ? (
+                  <KonvaImage
+                    image={backgroundImage}
+                    x={imageLayout.x}
+                    y={imageLayout.y}
+                    width={imageLayout.width}
+                    height={imageLayout.height}
+                    listening={false}
+                  />
+                ) : null}
+
+                {snapshot.elements.map((shape) => renderShape(shape))}
+                {draftShape ? renderShape(draftShape) : null}
+              </Group>
+            </Layer>
+          </Stage>
+        )}
       </div>
     </div>
   );
