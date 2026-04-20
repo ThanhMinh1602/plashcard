@@ -95,6 +95,8 @@ export default function CardsList({
           id: item.id,
           front: item.front,
           back: item.back,
+          frontData: item.frontData || null,
+          backData: item.backData || null,
         })
       );
       setCards(normalized);
@@ -207,20 +209,39 @@ export default function CardsList({
         const front = frontRef?.toDataURL?.() || item.front || '';
         const back = backRef?.toDataURL?.() || item.back || '';
 
+        const frontData = frontRef?.getSceneData?.() || item.frontData || null;
+        const backData = backRef?.getSceneData?.() || item.backData || null;
+
         if (item.id) {
-          await updateFlashcard(user.uid, packageItem.id, item.id, front, back);
+          await updateFlashcard(user.uid, packageItem.id, item.id, {
+            front,
+            back,
+            frontData,
+            backData,
+          });
+
           nextCards.push({
             ...item,
             front,
             back,
+            frontData,
+            backData,
           });
         } else {
-          const newId = await addFlashcard(user.uid, packageItem.id, front, back);
+          const newId = await addFlashcard(user.uid, packageItem.id, {
+            front,
+            back,
+            frontData,
+            backData,
+          });
+
           nextCards.push({
             ...item,
             id: newId,
             front,
             back,
+            frontData,
+            backData,
           });
         }
       }

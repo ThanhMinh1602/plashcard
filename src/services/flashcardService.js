@@ -13,6 +13,35 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
+// ===== HELPERS =====
+const safeString = (value) => (typeof value === 'string' ? value : '');
+
+const normalizeFlashcardPayload = (frontOrPayload, maybeBack) => {
+  // Hỗ trợ cả 2 kiểu:
+  // 1) addFlashcard(userId, packageId, front, back)
+  // 2) addFlashcard(userId, packageId, { front, back, frontData, backData })
+
+  if (
+    frontOrPayload &&
+    typeof frontOrPayload === 'object' &&
+    !Array.isArray(frontOrPayload)
+  ) {
+    return {
+      front: safeString(frontOrPayload.front),
+      back: safeString(frontOrPayload.back),
+      frontData: frontOrPayload.frontData ?? null,
+      backData: frontOrPayload.backData ?? null,
+    };
+  }
+
+  return {
+    front: safeString(frontOrPayload),
+    back: safeString(maybeBack),
+    frontData: null,
+    backData: null,
+  };
+};
+
 // ===== USER =====
 export const saveUserToFirestore = async (userId, email) => {
   try {
@@ -81,7 +110,12 @@ export const getPackages = async (userId) => {
   }
 };
 
-export const updatePackage = async (userId, packageId, name = '', description = '') => {
+export const updatePackage = async (
+  userId,
+  packageId,
+  name = '',
+  description = ''
+) => {
   try {
     const packageRef = doc(db, 'users', userId, 'packages', packageId);
     await updateDoc(packageRef, {
@@ -115,15 +149,24 @@ export const deletePackage = async (userId, packageId) => {
 };
 
 // ===== FLASHCARD =====
-export const addFlashcard = async (userId, packageId, front, back) => {
+export const addFlashcard = async (userId, packageId, frontOrPayload, maybeBack) => {
   try {
+    const { front, back, frontData, backData } = normalizeFlashcardPayload(
+      frontOrPayload,
+      maybeBack
+    );
+
     const cardsRef = collection(db, 'users', userId, 'packages', packageId, 'cards');
+
     const docRef = await addDoc(cardsRef, {
       front,
       back,
+      frontData,
+      backData,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
     return docRef.id;
   } catch (error) {
     console.error('Lỗi thêm card:', error);
@@ -139,9 +182,15 @@ export const getFlashcards = async (userId, packageId) => {
 
     const cards = [];
     querySnapshot.forEach((item) => {
+      const data = item.data();
+
       cards.push({
         id: item.id,
-        ...item.data(),
+        ...data,
+        front: safeString(data.front),
+        back: safeString(data.back),
+        frontData: data.frontData ?? null,
+        backData: data.backData ?? null,
       });
     });
 
@@ -152,12 +201,26 @@ export const getFlashcards = async (userId, packageId) => {
   }
 };
 
-export const updateFlashcard = async (userId, packageId, cardId, front, back) => {
+export const updateFlashcard = async (
+  userId,
+  packageId,
+  cardId,
+  frontOrPayload,
+  maybeBack
+) => {
   try {
+    const { front, back, frontData, backData } = normalizeFlashcardPayload(
+      frontOrPayload,
+      maybeBack
+    );
+
     const cardRef = doc(db, 'users', userId, 'packages', packageId, 'cards', cardId);
+
     await updateDoc(cardRef, {
       front,
       back,
+      frontData,
+      backData,
       updatedAt: serverTimestamp(),
     });
   } catch (error) {

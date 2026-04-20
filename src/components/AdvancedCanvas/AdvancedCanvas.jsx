@@ -5,7 +5,17 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Stage, Layer, Group, Rect, Line, Circle, Image as KonvaImage } from 'react-konva';
+import {
+  Stage,
+  Layer,
+  Group,
+  Rect,
+  Line,
+  Circle,
+  Path,
+  Image as KonvaImage,
+} from 'react-konva';
+import { getStroke } from 'perfect-freehand';
 
 const DOC_WIDTH = 900;
 const DOC_HEIGHT = 1200;
@@ -16,6 +26,26 @@ const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 const makeId = () =>
   `shape-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+const average = (a, b) => (a + b) / 2;
+
+const normalizePoint = (point) => {
+  if (!point) return { x: 0, y: 0, pressure: 0.5 };
+
+  if (Array.isArray(point)) {
+    return {
+      x: Number(point[0]) || 0,
+      y: Number(point[1]) || 0,
+      pressure: Number(point[2]) || 0.5,
+    };
+  }
+
+  return {
+    x: Number(point.x) || 0,
+    y: Number(point.y) || 0,
+    pressure: Number(point.pressure) || 0.5,
+  };
+};
 
 const getContainRect = (displayWidth, displayHeight) => {
   if (!displayWidth || !displayHeight) {
@@ -52,98 +82,285 @@ const readFileAsDataUrl = (file) =>
     reader.readAsDataURL(file);
   });
 
-const getBrushStyle = (brushType, baseSize, baseOpacity, color, tool) => {
-  const isEraser = tool === 'eraser';
-
-  if (isEraser) {
-    return {
-      stroke: '#000000',
-      strokeWidth: Math.max(6, baseSize * 1.25),
-      opacity: 1,
-      tension: 0.12,
-      compositeOperation: 'destination-out',
-    };
-  }
-
+const getBrushStrokeOptions = (brushType, currentSize, isComplete = false) => {
   switch (brushType) {
+    case 'pen':
+      return {
+        size: currentSize,
+        thinning: 0.58,
+        smoothing: 0.68,
+        streamline: 0.4,
+        simulatePressure: false,
+        last: isComplete,
+      };
+
     case 'pencil':
       return {
-        stroke: color,
-        strokeWidth: Math.max(1, baseSize * 0.95),
-        opacity: Math.min(1, baseOpacity * 0.62),
-        tension: 0.08,
-        compositeOperation: 'source-over',
+        size: Math.max(1, currentSize * 0.92),
+        thinning: 0.18,
+        smoothing: 0.38,
+        streamline: 0.18,
+        simulatePressure: false,
+        last: isComplete,
+        start: { taper: currentSize * 0.3, cap: true },
+        end: { taper: currentSize * 0.5, cap: true },
       };
 
     case 'marker':
       return {
-        stroke: color,
-        strokeWidth: Math.max(2, baseSize * 1.45),
-        opacity: Math.min(1, baseOpacity * 0.34),
-        tension: 0.2,
-        compositeOperation: 'source-over',
+        size: currentSize * 1.45,
+        thinning: 0.04,
+        smoothing: 0.8,
+        streamline: 0.56,
+        simulatePressure: false,
+        last: isComplete,
       };
 
     case 'calligraphy':
       return {
-        stroke: color,
-        strokeWidth: Math.max(2, baseSize * 1.12),
-        opacity: baseOpacity,
-        tension: 0.18,
-        compositeOperation: 'source-over',
+        size: currentSize * 1.08,
+        thinning: -0.12,
+        smoothing: 0.82,
+        streamline: 0.6,
+        simulatePressure: false,
+        last: isComplete,
+        start: { taper: currentSize * 0.7, cap: true },
+        end: { taper: currentSize * 1.05, cap: true },
       };
 
-    case 'pen':
     default:
       return {
-        stroke: color,
-        strokeWidth: Math.max(1, baseSize),
-        opacity: baseOpacity,
-        tension: 0.16,
-        compositeOperation: 'source-over',
+        size: currentSize,
+        thinning: 0.5,
+        smoothing: 0.5,
+        streamline: 0.5,
+        simulatePressure: false,
+        last: isComplete,
       };
   }
 };
 
+const getStrokePathData = (inputPoints, brushType, size) => {
+  if (!inputPoints?.length) return '';
+
+  const pts = inputPoints.map((point) => {
+    const p = normalizePoint(point);
+    return [p.x, p.y, p.pressure];
+  });
+
+  const outline = getStroke(pts, getBrushStrokeOptions(brushType, size, true));
+
+  if (!outline.length) return '';
+
+  const [first, ...rest] = outline;
+  let d = `M ${first[0]} ${first[1]}`;
+
+  for (let i = 0; i < rest.length; i += 1) {
+    const curr = rest[i];
+    const next = rest[(i + 1) % rest.length] || first;
+    d += ` Q ${curr[0]} ${curr[1]} ${average(curr[0], next[0])} ${average(
+      curr[1],
+      next[1]
+    )}`;
+  }
+
+  d += ' Z';
+  return d;
+};
+
+const normalizeSceneData = (initialImage, initialData) => {
+  if (initialData && typeof initialData === 'object') {
+    return {
+      elements: Array.isArray(initialData.elements)
+        ? initialData.elements.map((item) => ({
+            ...item,
+            points: Array.isArray(item.points)
+              ? item.points.map(normalizePoint)
+              : [],
+          }))
+        : [],
+      backgroundSrc: initialData.backgroundSrc || initialImage || '',
+      meta: initialData.meta || {},
+    };
+  }
+
+  if (typeof initialData === 'string' && initialData.trim()) {
+    try {
+      const parsed = JSON.parse(initialData);
+      return normalizeSceneData(initialImage, parsed);
+    } catch {
+      return {
+        elements: [],
+        backgroundSrc: initialImage || '',
+        meta: {},
+      };
+    }
+  }
+
+  return {
+    elements: [],
+    backgroundSrc: initialImage || '',
+    meta: {},
+  };
+};
+
+const getStylusConfig = (evt, inputMode) => {
+  const pointerType = evt?.pointerType || 'mouse';
+  const isPen = pointerType === 'pen';
+  const isTouch = pointerType === 'touch';
+  const isMouse = pointerType === 'mouse';
+
+  if (typeof evt?.isPrimary === 'boolean' && !evt.isPrimary) {
+    return { allow: false, reason: 'not-primary' };
+  }
+
+  if (isTouch) {
+    return { allow: false, reason: 'touch-blocked' };
+  }
+
+  if (isMouse && evt.button !== 0) {
+    return { allow: false, reason: 'mouse-button' };
+  }
+
+  if (inputMode === 'stylusOnly') {
+    if (isPen) return { allow: true, mode: 'pen' };
+    if (isMouse) return { allow: true, mode: 'mouse-dev' };
+    return { allow: false, reason: 'not-stylus' };
+  }
+
+  return { allow: true, mode: pointerType };
+};
+
+function renderSceneShape(shape) {
+  if (!shape) return null;
+
+  if (shape.kind === 'freehand') {
+    const pathData = getStrokePathData(
+      shape.points,
+      shape.brushType || 'pen',
+      shape.size || 4
+    );
+
+    if (!pathData) return null;
+
+    const isEraser = shape.tool === 'eraser';
+
+    let fillOpacity = shape.opacity ?? 1;
+    if (!isEraser && shape.brushType === 'pencil') {
+      fillOpacity = Math.min(1, fillOpacity * 0.58);
+    }
+    if (!isEraser && shape.brushType === 'marker') {
+      fillOpacity = Math.min(1, fillOpacity * 0.32);
+    }
+
+    return (
+      <Path
+        key={shape.id}
+        data={pathData}
+        fill={isEraser ? '#000000' : shape.color}
+        opacity={isEraser ? 1 : fillOpacity}
+        globalCompositeOperation={
+          isEraser ? 'destination-out' : 'source-over'
+        }
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
+
+  if (shape.kind === 'line') {
+    return (
+      <Line
+        key={shape.id}
+        points={[
+          shape.x1 || 0,
+          shape.y1 || 0,
+          shape.x2 || 0,
+          shape.y2 || 0,
+        ]}
+        stroke={shape.color}
+        strokeWidth={shape.size}
+        opacity={shape.opacity}
+        lineCap="round"
+        lineJoin="round"
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
+
+  if (shape.kind === 'rectangle') {
+    return (
+      <Rect
+        key={shape.id}
+        x={shape.x}
+        y={shape.y}
+        width={shape.width}
+        height={shape.height}
+        stroke={shape.color}
+        strokeWidth={shape.size}
+        opacity={shape.opacity}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
+
+  if (shape.kind === 'circle') {
+    return (
+      <Circle
+        key={shape.id}
+        x={shape.x}
+        y={shape.y}
+        radius={shape.radius}
+        stroke={shape.color}
+        strokeWidth={shape.size}
+        opacity={shape.opacity}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    );
+  }
+
+  return null;
+}
+
 function AdvancedCanvas(
   {
     initialImage = '',
+    initialData = null,
     tool = 'brush',
     brushType = 'pen',
     color = '#000000',
     size = 4,
     opacity = 1,
     backgroundColor = '#ffffff',
+    inputMode = 'stylusOnly',
     onStatusChange,
   },
   ref
 ) {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
-  const docGroupRef = useRef(null);
+  const exportGroupRef = useRef(null);
   const historyRef = useRef([]);
   const historyStepRef = useRef(-1);
-  const onStatusChangeRef = useRef(onStatusChange);
-  const initializedRef = useRef(false);
   const drawingRef = useRef(null);
-  const snapshotRef = useRef({
-    elements: [],
-    backgroundSrc: initialImage || '',
-  });
+  const snapshotRef = useRef(null);
+  const draftShapeRef = useRef(null);
+const rafRenderRef = useRef(null);
+const liveVersionRef = useRef(0);
+  const onStatusChangeRef = useRef(onStatusChange);
 
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
-  const [snapshot, setSnapshot] = useState({
-    elements: [],
-    backgroundSrc: initialImage || '',
-  });
-  const [backgroundImage, setBackgroundImage] = useState(null);
+  const [scene, setScene] = useState(() =>
+    normalizeSceneData(initialImage, initialData)
+  );
   const [draftShape, setDraftShape] = useState(null);
+  const [backgroundImage, setBackgroundImage] = useState(null);
   const [historyStep, setHistoryStep] = useState(0);
   const [historyLength, setHistoryLength] = useState(1);
-
-  useEffect(() => {
-    snapshotRef.current = snapshot;
-  }, [snapshot]);
+  const [, forceFrame] = useState(0);
 
   useEffect(() => {
     onStatusChangeRef.current = onStatusChange;
@@ -157,9 +374,24 @@ function AdvancedCanvas(
   }, [historyStep, historyLength]);
 
   useEffect(() => {
+    const nextScene = normalizeSceneData(initialImage, initialData);
+    snapshotRef.current = nextScene;
+    setScene(nextScene);
+    setDraftShape(null);
+    historyRef.current = [deepClone(nextScene)];
+    historyStepRef.current = 0;
+    setHistoryStep(0);
+    setHistoryLength(1);
+  }, [initialImage, initialData]);
+
+  useEffect(() => {
+    snapshotRef.current = scene;
+  }, [scene]);
+
+  useEffect(() => {
     let cancelled = false;
 
-    if (!snapshot.backgroundSrc) {
+    if (!scene.backgroundSrc) {
       setBackgroundImage(null);
       return;
     }
@@ -175,29 +407,12 @@ function AdvancedCanvas(
         setBackgroundImage(null);
       }
     };
-    img.src = snapshot.backgroundSrc;
+    img.src = scene.backgroundSrc;
 
     return () => {
       cancelled = true;
     };
-  }, [snapshot.backgroundSrc]);
-
-  useEffect(() => {
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-
-    const initialSnapshot = deepClone({
-      elements: [],
-      backgroundSrc: initialImage || '',
-    });
-
-    snapshotRef.current = initialSnapshot;
-    setSnapshot(initialSnapshot);
-    historyRef.current = [initialSnapshot];
-    historyStepRef.current = 0;
-    setHistoryStep(0);
-    setHistoryLength(1);
-  }, [initialImage]);
+  }, [scene.backgroundSrc]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -224,30 +439,50 @@ function AdvancedCanvas(
     return () => observer.disconnect();
   }, []);
 
-  const commitHistory = (nextSnapshot) => {
-    const safeSnapshot = deepClone(nextSnapshot);
+  const getDocPointFromStage = () => {
+    const stage = stageRef.current;
+    if (!stage) return null;
+
+    const pos = stage.getPointerPosition();
+    if (!pos) return null;
+
+    const { scale, offsetX, offsetY } = getContainRect(
+      displaySize.width,
+      displaySize.height
+    );
+
+    if (!scale) return null;
+
+    return {
+      x: clamp((pos.x - offsetX) / scale, 0, DOC_WIDTH),
+      y: clamp((pos.y - offsetY) / scale, 0, DOC_HEIGHT),
+    };
+  };
+
+  const commitHistory = (nextScene) => {
+    const safeScene = deepClone(nextScene);
     const nextHistory = historyRef.current.slice(0, historyStepRef.current + 1);
 
-    nextHistory.push(safeSnapshot);
+    nextHistory.push(safeScene);
     historyRef.current = nextHistory;
     historyStepRef.current = nextHistory.length - 1;
 
-    snapshotRef.current = safeSnapshot;
-    setSnapshot(safeSnapshot);
+    snapshotRef.current = safeScene;
+    setScene(safeScene);
     setHistoryStep(historyStepRef.current);
     setHistoryLength(nextHistory.length);
   };
 
-  const restoreHistory = (nextIndex) => {
-    const item = historyRef.current[nextIndex];
+  const restoreHistory = (index) => {
+    const item = historyRef.current[index];
     if (!item) return;
 
-    const safeSnapshot = deepClone(item);
-    historyStepRef.current = nextIndex;
-    snapshotRef.current = safeSnapshot;
-    setSnapshot(safeSnapshot);
+    const safeScene = deepClone(item);
+    historyStepRef.current = index;
+    snapshotRef.current = safeScene;
+    setScene(safeScene);
     setDraftShape(null);
-    setHistoryStep(nextIndex);
+    setHistoryStep(index);
     setHistoryLength(historyRef.current.length);
   };
 
@@ -262,106 +497,86 @@ function AdvancedCanvas(
   };
 
   const clearCanvas = () => {
-    const nextSnapshot = {
+    const nextScene = {
       elements: [],
       backgroundSrc: '',
+      meta: {
+        inputMode,
+        version: 1,
+      },
     };
+    drawingRef.current = null;
     setDraftShape(null);
-    commitHistory(nextSnapshot);
+    commitHistory(nextScene);
   };
 
-  const getDocPointFromStage = () => {
-    const stage = stageRef.current;
-    if (!stage) return null;
+  const beginStroke = (point, evt) => {
+    const pressure =
+      typeof evt.pressure === 'number' && evt.pressure > 0 ? evt.pressure : 0.5;
 
-    const pos = stage.getPointerPosition();
-    if (!pos) return null;
+    const nextDraft = {
+      id: makeId(),
+      kind: 'freehand',
+      tool,
+      brushType,
+      color,
+      size,
+      opacity,
+      points: [
+        { x: point.x, y: point.y, pressure },
+        { x: point.x + 0.01, y: point.y + 0.01, pressure },
+      ],
+    };
 
-    const { scale, offsetX, offsetY } = getContainRect(
-      displaySize.width,
-      displaySize.height
-    );
-
-    const x = clamp((pos.x - offsetX) / scale, 0, DOC_WIDTH);
-    const y = clamp((pos.y - offsetY) / scale, 0, DOC_HEIGHT);
-
-    return { x, y };
-  };
-
-  const shouldStartDrawing = (konvaEvent) => {
-    const evt = konvaEvent?.evt;
-    if (!evt) return false;
-
-    if (typeof evt.isPrimary === 'boolean' && !evt.isPrimary) {
-      return false;
-    }
-
-    if (evt.pointerType === 'mouse' && evt.button !== 0) {
-      return false;
-    }
-
-    // Tối ưu cho iPad + bút: bỏ finger draw để tránh chạm nhầm bằng tay.
-    // Pen và mouse vẫn hoạt động.
-    if (evt.pointerType === 'touch') {
-      return false;
-    }
-
-    return true;
+    drawingRef.current = { kind: 'freehand' };
+    setDraftShape(nextDraft);
   };
 
   const handlePointerDown = (e) => {
-    if (!shouldStartDrawing(e)) return;
+    const evt = e.evt;
+    const stylus = getStylusConfig(evt, inputMode);
+
+    if (!stylus.allow) return;
 
     const point = getDocPointFromStage();
     if (!point) return;
 
-    const evt = e.evt;
     if (evt.cancelable) evt.preventDefault();
 
     if (tool === 'brush' || tool === 'eraser') {
-      const pressure =
-        typeof evt.pressure === 'number' && evt.pressure > 0 ? evt.pressure : 0.5;
-
-      const nextDraft = {
-        id: makeId(),
-        kind: 'freehand',
-        tool,
-        brushType,
-        color,
-        size,
-        opacity,
-        points: [point.x, point.y, point.x + 0.01, point.y + 0.01],
-        pressures: [pressure],
-      };
-
-      drawingRef.current = {
-        kind: 'freehand',
-      };
-      setDraftShape(nextDraft);
+      beginStroke(point, evt);
       return;
     }
 
     if (tool === 'line') {
-      const nextDraft = {
-        id: makeId(),
-        kind: 'line',
-        color,
-        size,
-        opacity,
-        points: [point.x, point.y, point.x, point.y],
-      };
-
       drawingRef.current = {
         kind: 'line',
         startX: point.x,
         startY: point.y,
       };
-      setDraftShape(nextDraft);
+
+      setDraftShape({
+        id: makeId(),
+        kind: 'line',
+        color,
+        size,
+        opacity,
+        x1: point.x,
+        y1: point.y,
+        x2: point.x,
+        y2: point.y,
+      });
       return;
     }
 
     if (tool === 'rectangle') {
-      const nextDraft = {
+      drawingRef.current = {
+        kind: 'rectangle',
+        startX: point.x,
+        startY: point.y,
+      };
+
+      setDraftShape({
         id: makeId(),
         kind: 'rectangle',
         color,
@@ -371,19 +586,18 @@ function AdvancedCanvas(
         y: point.y,
         width: 0,
         height: 0,
-      };
-
-      drawingRef.current = {
-        kind: 'rectangle',
-        startX: point.x,
-        startY: point.y,
-      };
-      setDraftShape(nextDraft);
+      });
       return;
     }
 
     if (tool === 'circle') {
-      const nextDraft = {
+      drawingRef.current = {
+        kind: 'circle',
+        startX: point.x,
+        startY: point.y,
+      };
+
+      setDraftShape({
         id: makeId(),
         kind: 'circle',
         color,
@@ -392,24 +606,17 @@ function AdvancedCanvas(
         x: point.x,
         y: point.y,
         radius: 0,
-      };
-
-      drawingRef.current = {
-        kind: 'circle',
-        startX: point.x,
-        startY: point.y,
-      };
-      setDraftShape(nextDraft);
+      });
     }
   };
 
   const handlePointerMove = (e) => {
     if (!drawingRef.current || !draftShape) return;
 
+    const evt = e.evt;
     const point = getDocPointFromStage();
     if (!point) return;
 
-    const evt = e.evt;
     if (evt.cancelable) evt.preventDefault();
 
     if (drawingRef.current.kind === 'freehand') {
@@ -418,42 +625,47 @@ function AdvancedCanvas(
 
       setDraftShape((prev) => {
         if (!prev) return prev;
+
+        const lastPoint = prev.points[prev.points.length - 1];
+        const dx = point.x - lastPoint.x;
+        const dy = point.y - lastPoint.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 0.4) return prev;
+
         return {
           ...prev,
-          points: [...prev.points, point.x, point.y],
-          pressures: [...(prev.pressures || []), pressure],
+          points: [...prev.points, { x: point.x, y: point.y, pressure }],
         };
       });
       return;
     }
 
     if (drawingRef.current.kind === 'line') {
-      setDraftShape((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          points: [
-            drawingRef.current.startX,
-            drawingRef.current.startY,
-            point.x,
-            point.y,
-          ],
-        };
-      });
+      setDraftShape((prev) =>
+        prev
+          ? {
+              ...prev,
+              x2: point.x,
+              y2: point.y,
+            }
+          : prev
+      );
       return;
     }
 
     if (drawingRef.current.kind === 'rectangle') {
-      setDraftShape((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          x: drawingRef.current.startX,
-          y: drawingRef.current.startY,
-          width: point.x - drawingRef.current.startX,
-          height: point.y - drawingRef.current.startY,
-        };
-      });
+      setDraftShape((prev) =>
+        prev
+          ? {
+              ...prev,
+              x: drawingRef.current.startX,
+              y: drawingRef.current.startY,
+              width: point.x - drawingRef.current.startX,
+              height: point.y - drawingRef.current.startY,
+            }
+          : prev
+      );
       return;
     }
 
@@ -463,49 +675,63 @@ function AdvancedCanvas(
           Math.pow(point.y - drawingRef.current.startY, 2)
       );
 
-      setDraftShape((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          x: drawingRef.current.startX,
-          y: drawingRef.current.startY,
-          radius,
-        };
-      });
+      setDraftShape((prev) =>
+        prev
+          ? {
+              ...prev,
+              radius,
+            }
+          : prev
+      );
     }
   };
 
   const handlePointerUp = (e) => {
     if (!drawingRef.current || !draftShape) return;
 
-    const evt = e.evt;
-    if (evt?.cancelable) evt.preventDefault();
+    if (e.evt?.cancelable) {
+      e.evt.preventDefault();
+    }
 
-    const nextSnapshot = {
+    const nextScene = {
       ...snapshotRef.current,
       elements: [...snapshotRef.current.elements, deepClone(draftShape)],
+      meta: {
+        ...(snapshotRef.current.meta || {}),
+        inputMode,
+        version: 1,
+      },
     };
 
     drawingRef.current = null;
     setDraftShape(null);
-    commitHistory(nextSnapshot);
+    commitHistory(nextScene);
   };
 
   const importImageFile = async (file) => {
     if (!file) return;
+
     const dataUrl = await readFileAsDataUrl(file);
 
-    const nextSnapshot = {
+    const nextScene = {
       ...snapshotRef.current,
       backgroundSrc: dataUrl,
+      meta: {
+        ...(snapshotRef.current.meta || {}),
+        inputMode,
+        version: 1,
+      },
     };
 
+    drawingRef.current = null;
     setDraftShape(null);
-    commitHistory(nextSnapshot);
+    commitHistory(nextScene);
   };
 
+  const getSceneData = () => deepClone(snapshotRef.current);
+
   const exportComposite = () => {
-    const group = docGroupRef.current;
+    const group = exportGroupRef.current;
     if (!group || !displaySize.width || !displaySize.height) {
       return '';
     }
@@ -513,9 +739,7 @@ function AdvancedCanvas(
     const { drawWidth } = getContainRect(displaySize.width, displaySize.height);
     const pixelRatio = drawWidth ? DOC_WIDTH / drawWidth : 1;
 
-    return group.toDataURL({
-      pixelRatio,
-    });
+    return group.toDataURL({ pixelRatio });
   };
 
   const exportImage = () => {
@@ -530,93 +754,13 @@ function AdvancedCanvas(
 
   useImperativeHandle(ref, () => ({
     toDataURL: () => exportComposite(),
+    getSceneData,
     undo,
     redo,
     clear: clearCanvas,
     importImageFile,
     exportImage,
   }));
-
-  const renderShape = (shape) => {
-    if (!shape) return null;
-
-    if (shape.kind === 'freehand') {
-      const brush = getBrushStyle(
-        shape.brushType,
-        shape.size,
-        shape.opacity,
-        shape.color,
-        shape.tool
-      );
-
-      return (
-        <Line
-          key={shape.id}
-          points={shape.points}
-          stroke={brush.stroke}
-          strokeWidth={brush.strokeWidth}
-          opacity={brush.opacity}
-          lineCap="round"
-          lineJoin="round"
-          tension={brush.tension}
-          globalCompositeOperation={brush.compositeOperation}
-          listening={false}
-          perfectDrawEnabled={false}
-        />
-      );
-    }
-
-    if (shape.kind === 'line') {
-      return (
-        <Line
-          key={shape.id}
-          points={shape.points}
-          stroke={shape.color}
-          strokeWidth={shape.size}
-          opacity={shape.opacity}
-          lineCap="round"
-          lineJoin="round"
-          listening={false}
-          perfectDrawEnabled={false}
-        />
-      );
-    }
-
-    if (shape.kind === 'rectangle') {
-      return (
-        <Rect
-          key={shape.id}
-          x={shape.x}
-          y={shape.y}
-          width={shape.width}
-          height={shape.height}
-          stroke={shape.color}
-          strokeWidth={shape.size}
-          opacity={shape.opacity}
-          listening={false}
-          perfectDrawEnabled={false}
-        />
-      );
-    }
-
-    if (shape.kind === 'circle') {
-      return (
-        <Circle
-          key={shape.id}
-          x={shape.x}
-          y={shape.y}
-          radius={shape.radius}
-          stroke={shape.color}
-          strokeWidth={shape.size}
-          opacity={shape.opacity}
-          listening={false}
-          perfectDrawEnabled={false}
-        />
-      );
-    }
-
-    return null;
-  };
 
   const { scale, offsetX, offsetY } = getContainRect(
     displaySize.width,
@@ -653,15 +797,15 @@ function AdvancedCanvas(
             width={displaySize.width}
             height={displaySize.height}
             className="h-full w-full bg-white"
-            onPointerdown={handlePointerDown}
-            onPointermove={handlePointerMove}
-            onPointerup={handlePointerUp}
-            onPointercancel={handlePointerUp}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             onContextMenu={(e) => e.evt.preventDefault()}
           >
             <Layer>
               <Group
-                ref={docGroupRef}
+                ref={exportGroupRef}
                 x={offsetX}
                 y={offsetY}
                 scaleX={scale}
@@ -687,8 +831,8 @@ function AdvancedCanvas(
                   />
                 ) : null}
 
-                {snapshot.elements.map((shape) => renderShape(shape))}
-                {draftShape ? renderShape(draftShape) : null}
+                {scene.elements.map((shape) => renderSceneShape(shape))}
+                {draftShape ? renderSceneShape(draftShape) : null}
               </Group>
             </Layer>
           </Stage>

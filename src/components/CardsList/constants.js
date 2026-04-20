@@ -13,9 +13,9 @@ import { RiMarkPenLine } from 'react-icons/ri';
 export const TOOL_LIST = [
   { id: 'brush', icon: MdBrush, label: 'Brush' },
   { id: 'eraser', icon: BsEraser, label: 'Eraser' },
-  { id: 'line', icon: FiMinus, label: 'Line' },
-  { id: 'rectangle', icon: FiSquare, label: 'Rectangle' },
-  { id: 'circle', icon: FiCircle, label: 'Circle' },
+//   { id: 'line', icon: FiMinus, label: 'Line' },
+//   { id: 'rectangle', icon: FiSquare, label: 'Rectangle' },
+//   { id: 'circle', icon: FiCircle, label: 'Circle' },
 ];
 
 export const BRUSH_TYPES = [
@@ -48,6 +48,8 @@ export const createLocalCard = (card = {}) => ({
   id: card.id || null,
   front: card.front || '',
   back: card.back || '',
+  frontData: card.frontData || null,
+  backData: card.backData || null,
 });
 
 export const cn = (...classes) => classes.filter(Boolean).join(' ');
