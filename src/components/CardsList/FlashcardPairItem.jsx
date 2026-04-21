@@ -54,7 +54,7 @@ export default function FlashcardPairItem({
                 </button>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
                 <div
                     className={cn(
                         'rounded-[28px] border p-3 transition',
@@ -63,23 +63,11 @@ export default function FlashcardPairItem({
                             : 'border-sky-100 bg-sky-50/40'
                     )}
                 >
-                    <button
-                        type="button"
-                        onClick={() => setActiveCanvasKey(frontKey)}
-                        className={cn(
-                            'mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] transition',
-                            isFrontActive
-                                ? 'bg-white text-sky-600 shadow-sm'
-                                : 'bg-white/80 text-slate-500'
-                        )}
-                    >
-                        <span className="inline-block h-2 w-2 rounded-full bg-sky-400" />
-                        <span>Mặt trước</span>
-                    </button>
+
 
                     <div
                         onClick={() => setActiveCanvasKey(frontKey)}
-                        className="h-[360px] overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner sm:h-[430px] xl:h-[520px]"
+                        className="h-[360px] overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner md:h-[460px] lg:h-[520px]"
                     >
                         <AdvancedCanvas
                             ref={setCanvasRef(frontKey)}
@@ -105,23 +93,9 @@ export default function FlashcardPairItem({
                             : 'border-pink-100 bg-pink-50/40'
                     )}
                 >
-                    <button
-                        type="button"
-                        onClick={() => setActiveCanvasKey(backKey)}
-                        className={cn(
-                            'mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] transition',
-                            isBackActive
-                                ? 'bg-white text-pink-600 shadow-sm'
-                                : 'bg-white/80 text-slate-500'
-                        )}
-                    >
-                        <span className="inline-block h-2 w-2 rounded-full bg-pink-400" />
-                        <span>Mặt sau</span>
-                    </button>
-
                     <div
                         onClick={() => setActiveCanvasKey(backKey)}
-                        className="h-[360px] overflow-hidden rounded-[24px] border border-pink-100 bg-white shadow-inner sm:h-[430px] xl:h-[520px]"
+                        className="h-[360px] overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner md:h-[460px] lg:h-[520px]"
                     >
                         <AdvancedCanvas
                             ref={setCanvasRef(backKey)}

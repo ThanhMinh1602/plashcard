@@ -11,11 +11,7 @@ import { PiPencilSimpleLineBold } from 'react-icons/pi';
 import { RiMarkPenLine } from 'react-icons/ri';
 
 export const TOOL_LIST = [
-  { id: 'brush', icon: MdBrush, label: 'Brush' },
   { id: 'eraser', icon: BsEraser, label: 'Eraser' },
-//   { id: 'line', icon: FiMinus, label: 'Line' },
-//   { id: 'rectangle', icon: FiSquare, label: 'Rectangle' },
-//   { id: 'circle', icon: FiCircle, label: 'Circle' },
 ];
 
 export const BRUSH_TYPES = [

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import ConfirmModal from '../Common/ConfirmModal';
-import { FiPlus, FiSave } from 'react-icons/fi';
 import {
   getFlashcards,
   addFlashcard,
@@ -16,7 +15,6 @@ import FlashcardPairItem from './FlashcardPairItem';
 import {
   DEFAULT_TOOLBOX,
   createLocalCard,
-  cn,
 } from './constants';
 import usePackageEditor from './hooks/usePackageEditor';
 import useCanvasRegistry from './hooks/useCanvasRegistry';
@@ -76,7 +74,6 @@ export default function CardsList({
   });
 
   const canAddCard = packageName.trim().length > 0;
-  const isBrushTool = toolbox.tool === 'brush';
 
   useEffect(() => {
     loadCards();
@@ -164,6 +161,7 @@ export default function CardsList({
     input?.click();
   };
 
+  // ĐÃ BỔ SUNG LẠI HÀM NÀY ĐỂ FIX LỖI "handleImportChange is not defined"
   const handleImportChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -242,7 +240,7 @@ export default function CardsList({
             back,
             frontData,
             backData,
-          });
+            });
         }
       }
 
@@ -276,117 +274,71 @@ export default function CardsList({
         onChange={handleImportChange}
       />
 
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] pb-24">
-        <div className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-5 lg:px-8">
-          <CardsEditorHeader
-            onBack={onBack}
-            isEditingName={isEditingName}
-            headerNameInputRef={headerNameInputRef}
-            draftPackageName={draftPackageName}
-            setDraftPackageName={setDraftPackageName}
-            handleHeaderNameKeyDown={handleHeaderNameKeyDown}
-            saveHeaderName={saveHeaderName}
-            cancelHeaderNameEdit={cancelHeaderNameEdit}
-            openNameEditor={openNameEditor}
-            packageName={packageName}
-            isAutoSaving={isAutoSaving}
-            handleAddCardPair={handleAddCardPair}
-            canAddCard={canAddCard}
-            handleSaveAll={handleSaveAll}
-            savingAll={savingAll}
-            packageDescription={packageDescription}
-            handleDescriptionChange={handleDescriptionChange}
-            nameError={nameError}
-            cardsCount={cards.length}
-            activeCanvasKey={activeCanvasKey}
-            error={error}
-            saveMessage={saveMessage}
-          />
+      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] pb-12">
+        
+        {/* VÙNG KHÓA CỨNG Ở TOP: Gộp chung Header & Toolbar */}
+        <div className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
+          <div className="mx-auto w-full max-w-[1500px]">
+            <CardsEditorHeader
+              onBack={onBack}
+              isEditingName={isEditingName}
+              headerNameInputRef={headerNameInputRef}
+              draftPackageName={draftPackageName}
+              setDraftPackageName={setDraftPackageName}
+              handleHeaderNameKeyDown={handleHeaderNameKeyDown}
+              saveHeaderName={saveHeaderName}
+              cancelHeaderNameEdit={cancelHeaderNameEdit}
+              openNameEditor={openNameEditor}
+              packageName={packageName}
+              isAutoSaving={isAutoSaving}
+              handleSaveAll={handleSaveAll}
+              savingAll={savingAll}
+              nameError={nameError}
+              cardsCount={cards.length}
+              activeCanvasKey={activeCanvasKey}
+              error={error}
+              saveMessage={saveMessage}
+            />
 
-          <CardsEditorToolbar
-            activeCanvasRef={activeCanvasRef}
-            activeStatus={activeStatus}
-            isBrushTool={isBrushTool}
-            toolbox={toolbox}
-            setToolbox={setToolbox}
-            handleImportClick={handleImportClick}
-          />
-
-          <div className="mt-5">
-            {cards.length === 0 ? (
-              <CardsEmptyState
+            <div className="px-3 pb-3 sm:px-5 lg:px-8">
+              <CardsEditorToolbar
+                activeCanvasRef={activeCanvasRef}
+                activeStatus={activeStatus}
+                toolbox={toolbox}
+                setToolbox={setToolbox}
+                handleImportClick={handleImportClick}
                 handleAddCardPair={handleAddCardPair}
                 canAddCard={canAddCard}
               />
-            ) : (
-              <div className="space-y-6">
-                {cards.map((item, index) => (
-                  <FlashcardPairItem
-                    key={item.localId}
-                    item={item}
-                    index={index}
-                    activeCanvasKey={activeCanvasKey}
-                    setActiveCanvasKey={setActiveCanvasKey}
-                    setPairCardRef={setPairCardRef}
-                    setCanvasRef={setCanvasRef}
-                    toolbox={toolbox}
-                    handleCanvasStatusChange={handleCanvasStatusChange}
-                    handleDeleteCardPair={handleDeleteCardPair}
-                  />
-                ))}
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-40 px-3 sm:px-6">
-          <div className="pointer-events-auto mx-auto flex max-w-4xl flex-col gap-3 rounded-[28px] border border-white/70 bg-white/80 p-3 shadow-[0_20px_54px_rgba(148,163,184,0.18)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm text-slate-500">
-              {activeCanvasKey ? (
-                <>
-                  Đang chỉnh sửa{' '}
-                  <span className="font-bold text-slate-700">
-                    {activeCanvasKey.endsWith('-back') ? 'mặt sau' : 'mặt trước'}
-                  </span>{' '}
-                  · {cards.length} cặp thẻ
-                </>
-              ) : (
-                'Chọn một mặt thẻ để bắt đầu vẽ'
-              )}
+        {/* VÙNG DANH SÁCH THẺ TRƯỢT TỰ DO */}
+        <div className="mx-auto w-full max-w-[1500px] px-3 pt-6 sm:px-5 lg:px-8">
+          {cards.length === 0 ? (
+            <CardsEmptyState
+              handleAddCardPair={handleAddCardPair}
+              canAddCard={canAddCard}
+            />
+          ) : (
+            <div className="space-y-6">
+              {cards.map((item, index) => (
+                <FlashcardPairItem
+                  key={item.localId}
+                  item={item}
+                  index={index}
+                  activeCanvasKey={activeCanvasKey}
+                  setActiveCanvasKey={setActiveCanvasKey}
+                  setPairCardRef={setPairCardRef}
+                  setCanvasRef={setCanvasRef}
+                  toolbox={toolbox}
+                  handleCanvasStatusChange={handleCanvasStatusChange}
+                  handleDeleteCardPair={handleDeleteCardPair}
+                />
+              ))}
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleAddCardPair}
-                disabled={!canAddCard}
-                className={cn(
-                  'inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-sm font-bold transition',
-                  canAddCard
-                    ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    : 'cursor-not-allowed bg-slate-100 text-slate-400'
-                )}
-              >
-                <FiPlus size={16} />
-                <span>Thêm thẻ</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSaveAll}
-                disabled={savingAll}
-                className={cn(
-                  'inline-flex h-11 items-center gap-2 rounded-2xl px-4 text-sm font-bold transition',
-                  savingAll
-                    ? 'cursor-not-allowed bg-slate-200 text-slate-500'
-                    : 'bg-gradient-to-r from-sky-400 via-blue-500 to-pink-400 text-white shadow-[0_16px_36px_rgba(99,102,241,0.28)] hover:-translate-y-0.5'
-                )}
-              >
-                <FiSave size={16} />
-                <span>{savingAll ? 'Đang lưu...' : 'Lưu tất cả'}</span>
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 

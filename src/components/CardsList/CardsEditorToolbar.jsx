@@ -1,55 +1,61 @@
 import React from 'react';
-import { FiDownload, FiUpload } from 'react-icons/fi';
+import { FiDownload, FiUpload, FiCornerUpLeft, FiCornerUpRight, FiPlus } from 'react-icons/fi';
 import { BRUSH_TYPES, TOOL_LIST, cn } from './constants';
 
 export default function CardsEditorToolbar({
   activeCanvasRef,
   activeStatus,
-  isBrushTool,
   toolbox,
   setToolbox,
   handleImportClick,
+  handleAddCardPair,
+  canAddCard,
 }) {
   return (
-    <div className="sticky top-[148px] z-30 mt-4 overflow-x-auto rounded-[28px] border border-white/70 bg-white/80 px-3 py-3 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl md:top-[164px]">
-      <div className="flex min-w-max items-center gap-3">
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-2">
-          <button
-            type="button"
-            className={cn(
-              'inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-semibold transition',
-              !activeCanvasRef || !activeStatus.canUndo
-                ? 'cursor-not-allowed bg-white text-slate-300'
-                : 'bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-100'
-            )}
-            onClick={() => activeCanvasRef?.undo?.()}
-            disabled={!activeCanvasRef || !activeStatus.canUndo}
-          >
-            <span aria-hidden="true">↶</span>
-            <span>Undo</span>
-          </button>
+    <div className="rounded-xl border border-slate-200 bg-white/50 px-3 py-2.5 shadow-sm">
+      <div className="flex w-full flex-col gap-3 overflow-x-auto pb-1">
 
-          <button
-            type="button"
-            className={cn(
-              'inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-semibold transition',
-              !activeCanvasRef || !activeStatus.canRedo
-                ? 'cursor-not-allowed bg-white text-slate-300'
-                : 'bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-100'
-            )}
-            onClick={() => activeCanvasRef?.redo?.()}
-            disabled={!activeCanvasRef || !activeStatus.canRedo}
-          >
-            <span aria-hidden="true">↷</span>
-            <span>Redo</span>
-          </button>
-        </div>
+        {/* HÀNG 1: Thêm thẻ + Undo/Redo + Bút + Import/Export */}
+        <div className="flex min-w-max items-center gap-3">
 
-        {isBrushTool && (
-          <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50/80 p-2">
+          {/* 1. Undo / Redo */}
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-100 bg-slate-50 p-1.5">
+            <button
+              type="button"
+              title="Undo"
+              className={cn(
+                'inline-flex h-9 w-10 items-center justify-center rounded-lg transition',
+                !activeCanvasRef || !activeStatus.canUndo
+                  ? 'cursor-not-allowed text-slate-300'
+                  : 'bg-white text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-slate-100'
+              )}
+              onClick={() => activeCanvasRef?.undo?.()}
+              disabled={!activeCanvasRef || !activeStatus.canUndo}
+            >
+              <FiCornerUpLeft size={18} />
+            </button>
+
+            <button
+              type="button"
+              title="Redo"
+              className={cn(
+                'inline-flex h-9 w-10 items-center justify-center rounded-lg transition',
+                !activeCanvasRef || !activeStatus.canRedo
+                  ? 'cursor-not-allowed text-slate-300'
+                  : 'bg-white text-slate-700 shadow-sm hover:-translate-y-0.5 hover:bg-slate-100'
+              )}
+              onClick={() => activeCanvasRef?.redo?.()}
+              disabled={!activeCanvasRef || !activeStatus.canRedo}
+            >
+              <FiCornerUpRight size={18} />
+            </button>
+          </div>
+
+          {/* 2. Các loại Bút & Tẩy */}
+          <div className="flex items-center gap-1.5 rounded-xl border border-sky-100 bg-sky-50/50 p-1.5">
             {BRUSH_TYPES.map((item) => {
               const Icon = item.icon;
-              const active = toolbox.brushType === item.id;
+              const active = toolbox.brushType === item.id && toolbox.tool !== 'eraser';
 
               return (
                 <button
@@ -57,134 +63,133 @@ export default function CardsEditorToolbar({
                   type="button"
                   title={item.label}
                   className={cn(
-                    'inline-flex min-h-[46px] min-w-[72px] flex-col items-center justify-center rounded-2xl px-3 py-2 text-[11px] font-bold transition',
+                    'inline-flex min-h-[40px] min-w-[64px] flex-col items-center justify-center rounded-lg px-2 py-1 text-[10px] font-bold transition',
                     active
-                      ? 'bg-gradient-to-r from-sky-400 via-blue-500 to-pink-400 text-white shadow-[0_14px_30px_rgba(96,165,250,0.3)]'
-                      : 'bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50'
+                      ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:-translate-y-0.5 hover:bg-slate-50'
                   )}
                   onClick={() =>
-                    setToolbox((prev) => ({ ...prev, brushType: item.id }))
+                    setToolbox((prev) => ({
+                      ...prev,
+                      brushType: item.id,
+                      tool: 'brush'
+                    }))
                   }
                 >
-                  <Icon size={16} />
-                  <small>{item.label}</small>
+                  <Icon size={14} className="mb-0.5" />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+
+            <div className="mx-1 h-6 w-px bg-sky-200/60" />
+
+            {TOOL_LIST.filter(item => item.id !== 'brush' && item.id !== 'draw').map((item) => {
+              const Icon = item.icon;
+              const active = toolbox.tool === item.id;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  title={item.label}
+                  className={cn(
+                    'inline-flex min-h-[40px] min-w-[64px] flex-col items-center justify-center rounded-lg px-2 py-1 text-[10px] font-bold transition',
+                    active
+                      ? 'bg-gradient-to-r from-sky-400 to-blue-500 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:-translate-y-0.5 hover:bg-slate-50'
+                  )}
+                  onClick={() => setToolbox((prev) => ({ ...prev, tool: item.id }))}
+                >
+                  <Icon size={14} className="mb-0.5" />
+                  <span>{item.label}</span>
                 </button>
               );
             })}
           </div>
-        )}
 
-        <div className="flex items-center gap-2 rounded-2xl border border-pink-100 bg-pink-50/80 p-2">
-          {TOOL_LIST.map((item) => {
-            const Icon = item.icon;
-            const active = toolbox.tool === item.id;
-
-            return (
-              <button
-                key={item.id}
-                type="button"
-                title={item.label}
-                className={cn(
-                  'inline-flex min-h-[46px] min-w-[72px] flex-col items-center justify-center rounded-2xl px-3 py-2 text-[11px] font-bold transition',
-                  active
-                    ? 'bg-gradient-to-r from-sky-400 via-blue-500 to-pink-400 text-white shadow-[0_14px_30px_rgba(96,165,250,0.3)]'
-                    : 'bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50'
-                )}
-                onClick={() => setToolbox((prev) => ({ ...prev, tool: item.id }))}
-              >
-                <Icon size={16} />
-                <small>{item.label}</small>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2">
-          <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-            Color
-          </label>
-          <input
-            type="color"
-            value={toolbox.color}
-            onChange={(e) =>
-              setToolbox((prev) => ({
-                ...prev,
-                color: e.target.value,
-              }))
-            }
-            className="color-picker-soft"
-          />
-        </div>
-
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2">
-          <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-            Size
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="32"
-            value={toolbox.size}
-            onChange={(e) =>
-              setToolbox((prev) => ({
-                ...prev,
-                size: Number(e.target.value),
-              }))
-            }
-            className="range-soft w-28"
-          />
-          <span className="min-w-[24px] text-xs font-bold text-slate-600">
-            {toolbox.size}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-2">
-          <label className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-            Opacity
-          </label>
-          <input
-            type="range"
-            min="0.1"
-            max="1"
-            step="0.05"
-            value={toolbox.opacity}
-            onChange={(e) =>
-              setToolbox((prev) => ({
-                ...prev,
-                opacity: Number(e.target.value),
-              }))
-            }
-            className="range-soft w-28"
-          />
-          <span className="min-w-[40px] text-xs font-bold text-slate-600">
-            {Math.round(toolbox.opacity * 100)}%
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-2">
+          {/* 3. Import / Export */}
           <button
             type="button"
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white px-4 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-100"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-white px-3 text-xs font-semibold text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-100 hover:text-slate-900"
             onClick={handleImportClick}
           >
-            <FiUpload size={16} />
+            <FiUpload size={14} />
             <span>Import</span>
           </button>
-
+          {/* Nút Thêm Thẻ */}
           <button
             type="button"
+            onClick={handleAddCardPair}
+            disabled={!canAddCard}
             className={cn(
-              'inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-semibold transition',
-              activeCanvasRef
-                ? 'bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-100'
-                : 'cursor-not-allowed bg-white text-slate-300'
+              'inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-4 text-sm font-bold transition',
+              canAddCard
+                ? 'border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100'
+                : 'cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400'
             )}
-            onClick={() => activeCanvasRef?.exportImage?.()}
-            disabled={!activeCanvasRef}
           >
-            <FiDownload size={16} />
-            <span>Export</span>
+            <FiPlus size={18} />
+            <span>Thêm thẻ</span>
           </button>
+        </div>
+
+        {/* HÀNG 2: Color, Size, Opacity */}
+        <div className="flex w-full min-w-max items-center gap-3">
+
+          <div className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              Color
+            </label>
+            <input
+              type="color"
+              value={toolbox.color}
+              onChange={(e) =>
+                setToolbox((prev) => ({ ...prev, color: e.target.value }))
+              }
+              className="color-picker-soft h-7 w-7 cursor-pointer rounded bg-transparent"
+            />
+          </div>
+
+          <div className="flex flex-1 items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              Size
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="100"
+              value={toolbox.size}
+              onChange={(e) =>
+                setToolbox((prev) => ({ ...prev, size: Number(e.target.value) }))
+              }
+              className="range-soft w-full min-w-[100px]"
+            />
+            <span className="w-[28px] text-right text-xs font-bold text-slate-600">
+              {toolbox.size}
+            </span>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              Opacity
+            </label>
+            <input
+              type="range"
+              min="0.1"
+              max="1"
+              step="0.05"
+              value={toolbox.opacity}
+              onChange={(e) =>
+                setToolbox((prev) => ({ ...prev, opacity: Number(e.target.value) }))
+              }
+              className="range-soft w-28"
+            />
+            <span className="w-[36px] text-right text-xs font-bold text-slate-600">
+              {Math.round(toolbox.opacity * 100)}%
+            </span>
+          </div>
+
         </div>
       </div>
     </div>
