@@ -115,17 +115,22 @@ const getBrushStrokeOptions = (brushType, currentSize, isComplete = false) => {
         simulatePressure: false,
         last: isComplete,
       };
-
+    case 'chinese-brush':
     case 'calligraphy':
       return {
-        size: currentSize * 1.08,
-        thinning: -0.12,
-        smoothing: 0.82,
-        streamline: 0.6,
-        simulatePressure: false,
+        size: currentSize * 1.2,
+        // thinning > 0: Vuốt càng nhanh nét càng thanh (rất quan trọng cho nét phẩy/mác)
+        thinning: 0.6,
+        // smoothing: Làm mượt nét tay rung nhưng không quá cao để giữ được nét gập
+        smoothing: 0.65,
+        // streamline: Giảm xuống một chút (~0.4) để các góc vuông/góc nhọn trong chữ Hán không bị bo tròn quá lố
+        streamline: 0.4,
+        // BẬT LÊN TRUE: Nếu dùng chuột/cảm ứng không có lực nhấn, nó sẽ giả lập lực nhấn dựa trên tốc độ di chuột
+        simulatePressure: true,
         last: isComplete,
-        start: { taper: currentSize * 0.7, cap: true },
-        end: { taper: currentSize * 1.05, cap: true },
+        start: { taper: currentSize * 0.2, cap: true },
+        // Vuốt nhọn phần đuôi dài hơn để tạo cảm giác nhấc bút
+        end: { taper: currentSize * 0.8, cap: true },
       };
 
     default:
@@ -173,11 +178,11 @@ const normalizeSceneData = (initialImage, initialData) => {
     return {
       elements: Array.isArray(initialData.elements)
         ? initialData.elements.map((item) => ({
-            ...item,
-            points: Array.isArray(item.points)
-              ? item.points.map(normalizePoint)
-              : [],
-          }))
+          ...item,
+          points: Array.isArray(item.points)
+            ? item.points.map(normalizePoint)
+            : [],
+        }))
         : [],
       backgroundSrc: initialData.backgroundSrc || initialImage || '',
       meta: initialData.meta || {},
@@ -348,8 +353,8 @@ function AdvancedCanvas(
   const drawingRef = useRef(null);
   const snapshotRef = useRef(null);
   const draftShapeRef = useRef(null);
-const rafRenderRef = useRef(null);
-const liveVersionRef = useRef(0);
+  const rafRenderRef = useRef(null);
+  const liveVersionRef = useRef(0);
   const onStatusChangeRef = useRef(onStatusChange);
 
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -631,7 +636,7 @@ const liveVersionRef = useRef(0);
         const dy = point.y - lastPoint.y;
         const dist = Math.hypot(dx, dy);
 
-        if (dist < 0.4) return prev;
+        if (dist < 2.0) return prev;
 
         return {
           ...prev,
@@ -645,10 +650,10 @@ const liveVersionRef = useRef(0);
       setDraftShape((prev) =>
         prev
           ? {
-              ...prev,
-              x2: point.x,
-              y2: point.y,
-            }
+            ...prev,
+            x2: point.x,
+            y2: point.y,
+          }
           : prev
       );
       return;
@@ -658,12 +663,12 @@ const liveVersionRef = useRef(0);
       setDraftShape((prev) =>
         prev
           ? {
-              ...prev,
-              x: drawingRef.current.startX,
-              y: drawingRef.current.startY,
-              width: point.x - drawingRef.current.startX,
-              height: point.y - drawingRef.current.startY,
-            }
+            ...prev,
+            x: drawingRef.current.startX,
+            y: drawingRef.current.startY,
+            width: point.x - drawingRef.current.startX,
+            height: point.y - drawingRef.current.startY,
+          }
           : prev
       );
       return;
@@ -672,15 +677,15 @@ const liveVersionRef = useRef(0);
     if (drawingRef.current.kind === 'circle') {
       const radius = Math.sqrt(
         Math.pow(point.x - drawingRef.current.startX, 2) +
-          Math.pow(point.y - drawingRef.current.startY, 2)
+        Math.pow(point.y - drawingRef.current.startY, 2)
       );
 
       setDraftShape((prev) =>
         prev
           ? {
-              ...prev,
-              radius,
-            }
+            ...prev,
+            radius,
+          }
           : prev
       );
     }
