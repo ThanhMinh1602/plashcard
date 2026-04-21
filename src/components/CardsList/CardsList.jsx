@@ -19,6 +19,10 @@ import {
 import usePackageEditor from './hooks/usePackageEditor';
 import useCanvasRegistry from './hooks/useCanvasRegistry';
 
+// Import thư viện Zoom Pan Pinch và Icon
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { FiZoomIn, FiZoomOut, FiMaximize } from 'react-icons/fi';
+
 export default function CardsList({
   user,
   packageItem,
@@ -161,7 +165,6 @@ export default function CardsList({
     input?.click();
   };
 
-  // ĐÃ BỔ SUNG LẠI HÀM NÀY ĐỂ FIX LỖI "handleImportChange is not defined"
   const handleImportChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -240,7 +243,7 @@ export default function CardsList({
             back,
             frontData,
             backData,
-            });
+          });
         }
       }
 
@@ -274,10 +277,14 @@ export default function CardsList({
         onChange={handleImportChange}
       />
 
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] pb-12">
+      {/* Thay đổi chính 1: Bao bọc h-screen và ẩn cuộn mặc định */}
+      <div 
+        className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]"
+        style={{ overscrollBehavior: 'none' }} // Ngăn trình duyệt kéo dãn trang trên iPad
+      >
         
-        {/* VÙNG KHÓA CỨNG Ở TOP: Gộp chung Header & Toolbar */}
-        <div className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
+        {/* VÙNG KHÓA CỨNG Ở TOP: Header & Toolbar */}
+        <div className="z-40 w-full shrink-0 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
           <div className="mx-auto w-full max-w-[1500px]">
             <CardsEditorHeader
               onBack={onBack}
@@ -314,30 +321,78 @@ export default function CardsList({
           </div>
         </div>
 
-        {/* VÙNG DANH SÁCH THẺ TRƯỢT TỰ DO */}
-        <div className="mx-auto w-full max-w-[1500px] px-3 pt-6 sm:px-5 lg:px-8">
+        {/* VÙNG DANH SÁCH THẺ (DẠNG TRỤC DỌC - ZOOM GIỚI HẠN) */}
+        <div className="relative w-full flex-1 overflow-hidden">
           {cards.length === 0 ? (
-            <CardsEmptyState
-              handleAddCardPair={handleAddCardPair}
-              canAddCard={canAddCard}
-            />
-          ) : (
-            <div className="space-y-6">
-              {cards.map((item, index) => (
-                <FlashcardPairItem
-                  key={item.localId}
-                  item={item}
-                  index={index}
-                  activeCanvasKey={activeCanvasKey}
-                  setActiveCanvasKey={setActiveCanvasKey}
-                  setPairCardRef={setPairCardRef}
-                  setCanvasRef={setCanvasRef}
-                  toolbox={toolbox}
-                  handleCanvasStatusChange={handleCanvasStatusChange}
-                  handleDeleteCardPair={handleDeleteCardPair}
-                />
-              ))}
+            <div className="flex h-full w-full items-center justify-center p-8">
+              <CardsEmptyState
+                handleAddCardPair={handleAddCardPair}
+                canAddCard={canAddCard}
+              />
             </div>
+          ) : (
+            <TransformWrapper
+              initialScale={1}
+              minScale={1} // Cực kỳ quan trọng: Không cho phép zoom nhỏ hơn khung hình iPad (vừa khít màn hình)
+              maxScale={4} // Vẫn cho phép zoom lớn lên 4 lần để vẽ chi tiết
+              limitToBounds={true} // Giới hạn không cho kéo văng nội dung ra khỏi màn hình
+              centerOnInit={true} // Tự động căn giữa khi load
+              wheel={{ step: 0.1 }}
+              pinch={{ step: 5 }}
+              panning={{
+                allowLeftClickPan: true, // Cho phép vuốt 1 ngón tay trên iPad để cuộn dọc/ngang
+                activationKeys: [" "], 
+              }}
+              doubleClick={{ disabled: true }}
+            >
+              {({ zoomIn, zoomOut, resetTransform }) => (
+                <>
+                  {/* Bảng điều khiển Zoom nổi ở góc */}
+                  <div className="absolute bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl border border-slate-200/50 bg-white/80 p-2 shadow-lg backdrop-blur-xl">
+                    <button type="button" onClick={() => zoomOut()} className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200">
+                      <FiZoomOut size={22} />
+                    </button>
+                    <div className="h-6 w-px bg-slate-300" />
+                    <button type="button" onClick={() => resetTransform()} className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200">
+                      <FiMaximize size={22} />
+                    </button>
+                    <div className="h-6 w-px bg-slate-300" />
+                    <button type="button" onClick={() => zoomIn()} className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200">
+                      <FiZoomIn size={22} />
+                    </button>
+                  </div>
+
+                    {/* KHUNG CHỨA THẺ: w-full và flex-col thay vì không gian vô hạn */}
+                    <div 
+                      className="flex w-full flex-col items-center justify-start gap-12 py-16"
+                      style={{ 
+                        // Giữ lại pattern lưới nếu bạn thích, hoặc có thể xóa style này đi để dùng nền trơn
+                        backgroundImage: "radial-gradient(#cbd5e1 1.5px, transparent 1.5px)",
+                        backgroundSize: "32px 32px",
+                        backgroundPosition: "0 0"
+                      }}
+                    >
+                      {cards.map((item, index) => (
+                        // Chiều rộng thẻ tối đa là 850px, hoặc 90% chiều rộng iPad (để có padding 2 bên)
+                        <div key={item.localId} className="w-[850px] max-w-[90%] shrink-0">
+                          <FlashcardPairItem
+                            item={item}
+                            index={index}
+                            activeCanvasKey={activeCanvasKey}
+                            setActiveCanvasKey={setActiveCanvasKey}
+                            setPairCardRef={setPairCardRef}
+                            setCanvasRef={setCanvasRef}
+                            toolbox={toolbox}
+                            handleCanvasStatusChange={handleCanvasStatusChange}
+                            handleDeleteCardPair={handleDeleteCardPair}
+                          />
+                        </div>
+                      ))}
+                    </div>
+          
+                </>
+              )}
+            </TransformWrapper>
           )}
         </div>
       </div>
