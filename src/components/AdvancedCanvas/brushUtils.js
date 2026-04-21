@@ -6,24 +6,63 @@ export const getBrushStrokeOptions = (brushType, currentSize, isComplete = false
     case 'chinese-brush':
       return {
         size: currentSize * 1.2,
-        thinning: 0.6,
-        smoothing: 0.65,
-        streamline: 0.4,
+        thinning: 0.7,
+        smoothing: 0.85,
+        streamline: 0.7,
         simulatePressure: true,
         last: isComplete,
         start: { taper: currentSize * 0.2, cap: true },
         end: { taper: currentSize * 0.8, cap: true },
       };
     case 'pen':
-      return { size: currentSize, thinning: 0.58, smoothing: 0.68, streamline: 0.4, simulatePressure: false, last: isComplete };
+      return { 
+        size: currentSize, 
+        thinning: 0.5, 
+        smoothing: 0.8, 
+        streamline: 0.65, 
+        simulatePressure: false, 
+        last: isComplete 
+      };
     case 'pencil':
-      return { size: Math.max(1, currentSize * 0.92), thinning: 0.18, smoothing: 0.38, streamline: 0.18, simulatePressure: false, last: isComplete, start: { taper: currentSize * 0.3, cap: true }, end: { taper: currentSize * 0.5, cap: true } };
+      return { 
+        size: Math.max(1, currentSize * 0.92), 
+        thinning: 0.1, 
+        smoothing: 0.7, 
+        streamline: 0.55, 
+        simulatePressure: false, 
+        last: isComplete, 
+        start: { taper: currentSize * 0.3, cap: true }, 
+        end: { taper: currentSize * 0.5, cap: true } 
+      };
     case 'marker':
-      return { size: currentSize * 1.45, thinning: 0.04, smoothing: 0.8, streamline: 0.56, simulatePressure: false, last: isComplete };
+      return { 
+        size: currentSize * 1.45, 
+        thinning: 0.0, 
+        smoothing: 0.85, 
+        streamline: 0.7, 
+        simulatePressure: false, 
+        last: isComplete 
+      };
     case 'calligraphy':
-      return { size: currentSize * 1.08, thinning: -0.12, smoothing: 0.82, streamline: 0.6, simulatePressure: false, last: isComplete, start: { taper: currentSize * 0.7, cap: true }, end: { taper: currentSize * 1.05, cap: true } };
+      return { 
+        size: currentSize * 1.08, 
+        thinning: -0.12, 
+        smoothing: 0.85, 
+        streamline: 0.75, 
+        simulatePressure: false, 
+        last: isComplete, 
+        start: { taper: currentSize * 0.7, cap: true }, 
+        end: { taper: currentSize * 1.05, cap: true } 
+      };
     default:
-      return { size: currentSize, thinning: 0.5, smoothing: 0.5, streamline: 0.5, simulatePressure: false, last: isComplete };
+      return { 
+        size: currentSize, 
+        thinning: 0.5, 
+        smoothing: 0.8, 
+        streamline: 0.65, 
+        simulatePressure: false, 
+        last: isComplete 
+      };
   }
 };
 
