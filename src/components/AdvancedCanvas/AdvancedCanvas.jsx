@@ -21,7 +21,6 @@ function AdvancedCanvas(
 ) {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
-  const exportGroupRef = useRef(null);
   
   // History Refs
   const historyRef = useRef([]);
@@ -220,12 +219,22 @@ function AdvancedCanvas(
     commitHistory(nextScene);
   };
 
+  // Nâng cấp Export để chụp toàn bộ Stage theo tọa độ Crop
   const exportComposite = () => {
-    const group = exportGroupRef.current;
-    if (!group || !displaySize.width || !displaySize.height) return '';
-    const { drawWidth } = getContainRect(displaySize.width, displaySize.height);
-    const pixelRatio = drawWidth ? DOC_WIDTH / drawWidth : 1;
-    return group.toDataURL({ pixelRatio });
+    const stage = stageRef.current;
+    if (!stage || !displaySize.width || !displaySize.height) return '';
+    const { scale, offsetX, offsetY } = getContainRect(displaySize.width, displaySize.height);
+    
+    // PixelRatio giúp ảnh xuất ra đúng với độ phân giải thật của DOC_WIDTH x DOC_HEIGHT
+    const exportPixelRatio = 1 / scale; 
+
+    return stage.toDataURL({
+      x: offsetX,
+      y: offsetY,
+      width: DOC_WIDTH * scale,
+      height: DOC_HEIGHT * scale,
+      pixelRatio: exportPixelRatio,
+    });
   };
 
   const exportImage = () => {
@@ -259,7 +268,12 @@ function AdvancedCanvas(
   })();
 
   return (
-    <div ref={containerRef} className="flex h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white" style={{ touchAction: 'none' }}>
+    // Thêm CSS aspectRatio: '9/16' và margin auto để nó giữ tỉ lệ 16:9 dọc và căn giữa
+    <div 
+      ref={containerRef} 
+      className="flex max-h-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white mx-auto" 
+      style={{ touchAction: 'none', aspectRatio: '9 / 16' }}
+    >
       <div className="relative h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[inherit] bg-white">
         {displaySize.width > 0 && displaySize.height > 0 && (
           <Stage
@@ -267,12 +281,18 @@ function AdvancedCanvas(
             onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp} onContextMenu={(e) => e.evt.preventDefault()}
           >
+            {/* LAYER 1: Chỉ chứa Background. Cục tẩy ở Layer trên sẽ không chạm tới Layer này */}
             <Layer>
-              <Group ref={exportGroupRef} x={offsetX} y={offsetY} scaleX={scale} scaleY={scale}>
+              <Group x={offsetX} y={offsetY} scaleX={scale} scaleY={scale}>
                 <Rect x={0} y={0} width={DOC_WIDTH} height={DOC_HEIGHT} fill={backgroundColor} listening={false} />
                 {backgroundImage && imageLayout && (
                   <KonvaImage image={backgroundImage} x={imageLayout.x} y={imageLayout.y} width={imageLayout.width} height={imageLayout.height} listening={false} />
                 )}
+              </Group>
+            </Layer>
+
+            <Layer>
+              <Group x={offsetX} y={offsetY} scaleX={scale} scaleY={scale}>
                 {scene.elements.map((shape) => <ShapeRenderer key={shape.id} shape={shape} />)}
                 {draftShape && <ShapeRenderer shape={draftShape} />}
               </Group>

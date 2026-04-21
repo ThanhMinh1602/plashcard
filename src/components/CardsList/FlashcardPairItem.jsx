@@ -55,6 +55,7 @@ export default function FlashcardPairItem({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
+                {/* MẶT TRƯỚC */}
                 <div
                     className={cn(
                         'rounded-[28px] border p-3 transition',
@@ -63,11 +64,10 @@ export default function FlashcardPairItem({
                             : 'border-sky-100 bg-sky-50/40'
                     )}
                 >
-
-
                     <div
                         onClick={() => setActiveCanvasKey(frontKey)}
-                        className="h-[360px] overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner md:h-[460px] lg:h-[520px]"
+                        // Đã thay đổi: Dùng aspect-[9/16] w-full thay cho các height cố định
+                        className="aspect-[9/16] w-full overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner"
                     >
                         <AdvancedCanvas
                             ref={setCanvasRef(frontKey)}
@@ -85,6 +85,7 @@ export default function FlashcardPairItem({
                     </div>
                 </div>
 
+                {/* MẶT SAU */}
                 <div
                     className={cn(
                         'rounded-[28px] border p-3 transition',
@@ -95,7 +96,8 @@ export default function FlashcardPairItem({
                 >
                     <div
                         onClick={() => setActiveCanvasKey(backKey)}
-                        className="h-[360px] overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner md:h-[460px] lg:h-[520px]"
+                        // Đã thay đổi: Dùng aspect-[9/16] w-full thay cho các height cố định
+                        className="aspect-[9/16] w-full overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner"
                     >
                         <AdvancedCanvas
                             ref={setCanvasRef(backKey)}

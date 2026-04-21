@@ -1,2 +1,2 @@
-export const DOC_WIDTH = 900;
-export const DOC_HEIGHT = 1200;
+export const DOC_WIDTH = 1080;
+export const DOC_HEIGHT = 1920;
