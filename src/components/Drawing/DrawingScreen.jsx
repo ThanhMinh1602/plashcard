@@ -5,27 +5,123 @@ import { getStroke } from 'perfect-freehand';
 const getDynamicStrokeOptions = (brushType, size) => {
   const baseOptions = {
     size,
-    thinning: 0.7,
-    smoothing: 0.5,
-    streamline: 0.5,
+    thinning: 0.45,
+    smoothing: 0.78,
+    streamline: 0.65,
+    simulatePressure: true,
     easing: (t) => t,
-    start: { taper: 10, easing: (t) => t * t * t },
-    end: { taper: 10, easing: (t) => 1 - (1 - t) * (1 - t) * (1 - t) },
+    start: {
+      taper: size * 0.8,
+      cap: true,
+      easing: (t) => t * t,
+    },
+    end: {
+      taper: size * 1.6,
+      cap: true,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+    },
   };
 
   switch (brushType) {
     case 'pencil':
-      return { ...baseOptions, thinning: 0.1, smoothing: 0.8 };
+      return {
+        ...baseOptions,
+        size: size * 0.9,
+        thinning: 0.18,
+        smoothing: 0.9,
+        streamline: 0.72,
+      };
+
     case 'marker':
-      return { ...baseOptions, size: size * 1.5, thinning: 0, smoothing: 0.2, start: { taper: 0 }, end: { taper: 0 } };
+      return {
+        ...baseOptions,
+        size: size * 1.55,
+        thinning: 0.03,
+        smoothing: 0.86,
+        streamline: 0.78,
+        start: { taper: 0, cap: true },
+        end: { taper: 0, cap: true },
+      };
+
     case 'calligraphy':
-      return { ...baseOptions, thinning: 0.9, smoothing: 0.8, start: { taper: 40 }, end: { taper: 40 } };
-    default: // pen
+      return {
+        ...baseOptions,
+        size: size * 1.15,
+        thinning: 0.82,
+        smoothing: 0.88,
+        streamline: 0.7,
+        start: { taper: size * 2.5, cap: true },
+        end: { taper: size * 2.5, cap: true },
+      };
+
+    default:
       return baseOptions;
   }
 };
 
-const CANVAS_SCALE = window.devicePixelRatio || 1;
+const CANVAS_SCALE =
+  typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+
+const getSvgPathFromStroke = (points) => {
+  if (!points.length) return '';
+
+  const max = points.length - 1;
+
+  return points
+    .reduce(
+      (acc, point, i, arr) => {
+        const [x0, y0] = point;
+        const [x1, y1] = arr[i === max ? 0 : i + 1];
+
+        acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+        return acc;
+      },
+      ['M', points[0][0], points[0][1], 'Q']
+    )
+    .concat('Z')
+    .join(' ');
+};
+
+const getPressure = (e) => {
+  if (e.pointerType === 'mouse') return 0.5;
+  return Math.min(Math.max(e.pressure || 0.5, 0.12), 1);
+};
+
+const getDistance = (a, b) => {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  return Math.hypot(dx, dy);
+};
+
+const appendSmoothPoint = (points, nextPoint) => {
+  const lastPoint = points[points.length - 1];
+
+  if (!lastPoint) {
+    points.push(nextPoint);
+    return;
+  }
+
+  const distance = getDistance(lastPoint, nextPoint);
+
+  // Bỏ điểm quá sát để giảm rung tay.
+  if (distance < 0.7) return;
+
+  // Nội suy thêm điểm nếu di chuyển nhanh để nét không bị gãy.
+  if (distance > 6) {
+    const steps = Math.min(8, Math.floor(distance / 3));
+
+    for (let i = 1; i < steps; i += 1) {
+      const t = i / steps;
+      points.push([
+        lastPoint[0] + (nextPoint[0] - lastPoint[0]) * t,
+        lastPoint[1] + (nextPoint[1] - lastPoint[1]) * t,
+        lastPoint[2] + (nextPoint[2] - lastPoint[2]) * t,
+      ]);
+    }
+  }
+
+  points.push(nextPoint);
+};
 
 const DrawingScreen = forwardRef(({
   initialImage,
