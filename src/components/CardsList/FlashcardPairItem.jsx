@@ -1,6 +1,6 @@
 import React from 'react';
 import { FiTrash2 } from 'react-icons/fi';
-import AdvancedCanvas from '../AdvancedCanvas/AdvancedCanvas';
+import DrawingScreen from '../Drawing/DrawingScreen';
 import {
     BACK_PAPER_COLOR,
     FRONT_PAPER_COLOR,
@@ -65,11 +65,10 @@ export default function FlashcardPairItem({
                     )}
                 >
                     <div
-                        onClick={() => setActiveCanvasKey(frontKey)}
-                        // Đã thay đổi: Dùng aspect-[9/16] w-full thay cho các height cố định
+                        onPointerDownCapture={() => setActiveCanvasKey(frontKey)}
                         className="aspect-[9/16] w-full overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner"
                     >
-                        <AdvancedCanvas
+                        <DrawingScreen
                             ref={setCanvasRef(frontKey)}
                             initialImage={item.front}
                             initialData={item.frontData}
@@ -79,7 +78,7 @@ export default function FlashcardPairItem({
                             size={toolbox.size}
                             opacity={toolbox.opacity}
                             backgroundColor={FRONT_PAPER_COLOR}
-                            inputMode="stylusOnly"
+                            inputMode="all"
                             onStatusChange={handleCanvasStatusChange(frontKey)}
                         />
                     </div>
@@ -95,11 +94,10 @@ export default function FlashcardPairItem({
                     )}
                 >
                     <div
-                        onClick={() => setActiveCanvasKey(backKey)}
-                        // Đã thay đổi: Dùng aspect-[9/16] w-full thay cho các height cố định
+                        onPointerDownCapture={() => setActiveCanvasKey(backKey)}
                         className="aspect-[9/16] w-full overflow-hidden rounded-[24px] border border-sky-100 bg-white shadow-inner"
                     >
-                        <AdvancedCanvas
+                        <DrawingScreen
                             ref={setCanvasRef(backKey)}
                             initialImage={item.back}
                             initialData={item.backData}
@@ -109,7 +107,7 @@ export default function FlashcardPairItem({
                             size={toolbox.size}
                             opacity={toolbox.opacity}
                             backgroundColor={BACK_PAPER_COLOR}
-                            inputMode="stylusOnly"
+                            inputMode="all"
                             onStatusChange={handleCanvasStatusChange(backKey)}
                         />
                     </div>
