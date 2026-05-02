@@ -19,7 +19,7 @@ import {
 import usePackageEditor from './hooks/usePackageEditor';
 import useCanvasRegistry from './hooks/useCanvasRegistry';
 
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { FiZoomIn, FiZoomOut, FiMaximize } from 'react-icons/fi';
 
 export default function CardsList({
@@ -88,7 +88,9 @@ export default function CardsList({
     try {
       setLoading(true);
       setError('');
+
       const userCards = await getFlashcards(user.uid, packageItem.id);
+
       const normalized = userCards.map((item) =>
         createLocalCard({
           localId: item.id,
@@ -99,6 +101,7 @@ export default function CardsList({
           backData: item.backData || null,
         })
       );
+
       setCards(normalized);
     } catch (err) {
       console.error('Lỗi load cards:', err);
@@ -117,6 +120,7 @@ export default function CardsList({
     }
 
     const newCard = createLocalCard();
+
     queueScrollToCard(newCard.localId);
     setCards((prev) => [...prev, newCard]);
     setActiveCanvasKey(`${newCard.localId}-front`);
@@ -131,6 +135,7 @@ export default function CardsList({
     if (!localId) return;
 
     const target = cards.find((item) => item.localId === localId);
+
     if (!target) {
       setDeleteTargetId(null);
       return;
@@ -188,7 +193,13 @@ export default function CardsList({
     try {
       setSavingAll(true);
 
-      await updatePackage(user.uid, packageItem.id, packageName, packageDescription);
+      await updatePackage(
+        user.uid,
+        packageItem.id,
+        packageName,
+        packageDescription
+      );
+
       syncSavedPackageSnapshot({
         name: packageName,
         description: packageDescription,
@@ -276,7 +287,7 @@ export default function CardsList({
         onChange={handleImportChange}
       />
 
-      <div 
+      <div
         className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]"
         style={{ overscrollBehavior: 'none' }}
       >
@@ -328,45 +339,79 @@ export default function CardsList({
           ) : (
             <TransformWrapper
               initialScale={1}
-              minScale={1}
+              minScale={0.45}
               maxScale={4}
-              limitToBounds={true}
-              centerOnInit={true}
-              wheel={{ step: 0.1 }}
-              pinch={{ step: 5 }}
+              limitToBounds={false}
+              centerOnInit={false}
+              wheel={{
+                step: 0.08,
+                wheelDisabled: false,
+                touchPadDisabled: false,
+              }}
+              pinch={{
+                step: 5,
+                disabled: false,
+              }}
               panning={{
-                // ĐÃ ĐỔI: Chặn kéo bằng 1 ngón tay, để tránh cuộn trang khi tỳ tay vẽ
-                allowLeftClickPan: false, 
-                activationKeys: [" "], 
+                disabled: false,
+                allowLeftClickPan: true,
+                allowMiddleClickPan: true,
+                allowRightClickPan: false,
+                velocityDisabled: false,
               }}
               doubleClick={{ disabled: true }}
             >
               {({ zoomIn, zoomOut, resetTransform }) => (
                 <>
                   <div className="absolute bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl border border-slate-200/50 bg-white/80 p-2 shadow-lg backdrop-blur-xl">
-                    <button type="button" onClick={() => zoomOut()} className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => zoomOut()}
+                      className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200"
+                    >
                       <FiZoomOut size={22} />
                     </button>
+
                     <div className="h-6 w-px bg-slate-300" />
-                    <button type="button" onClick={() => resetTransform()} className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200">
+
+                    <button
+                      type="button"
+                      onClick={() => resetTransform()}
+                      className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200"
+                    >
                       <FiMaximize size={22} />
                     </button>
+
                     <div className="h-6 w-px bg-slate-300" />
-                    <button type="button" onClick={() => zoomIn()} className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200">
+
+                    <button
+                      type="button"
+                      onClick={() => zoomIn()}
+                      className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200"
+                    >
                       <FiZoomIn size={22} />
                     </button>
                   </div>
 
-                    <div 
+                  <TransformComponent
+                    wrapperClass="!h-full !w-full"
+                    contentClass="!min-h-full !w-full"
+                  >
+                    <div
                       className="flex w-full flex-col items-center justify-start gap-12 py-16"
-                      style={{ 
-                        backgroundImage: "radial-gradient(#cbd5e1 1.5px, transparent 1.5px)",
-                        backgroundSize: "32px 32px",
-                        backgroundPosition: "0 0"
+                      style={{
+                        backgroundImage:
+                          'radial-gradient(#cbd5e1 1.5px, transparent 1.5px)',
+                        backgroundSize: '32px 32px',
+                        backgroundPosition: '0 0',
+                        touchAction: 'none',
                       }}
                     >
                       {cards.map((item, index) => (
-                        <div key={item.localId} className="w-[850px] max-w-[90%] shrink-0">
+                        <div
+                          key={item.localId}
+                          className="w-[850px] max-w-[90%] shrink-0"
+                        >
                           <FlashcardPairItem
                             item={item}
                             index={index}
@@ -381,6 +426,7 @@ export default function CardsList({
                         </div>
                       ))}
                     </div>
+                  </TransformComponent>
                 </>
               )}
             </TransformWrapper>

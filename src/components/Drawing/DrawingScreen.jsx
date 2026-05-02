@@ -32,18 +32,14 @@ const DrawingScreen = forwardRef(
       inputMode = 'all',
       onStatusChange,
 
-      // none | grid | ruled
       paperPattern = 'grid',
 
-      // Ô kẻ nhỏ
       paperGridSize = 24,
       paperGridColor = 'rgba(100, 116, 139, 0.18)',
 
-      // Vùng màu dưới cùng, tính theo số ô nhỏ
       paperBottomTintColor = '',
       paperBottomTintRows = 0,
 
-      // Dòng kẻ ngang, giữ lại nếu sau này muốn dùng
       paperLineSpacing = 30,
       paperLineColor = 'rgba(148, 163, 184, 0.36)',
       paperMarginLineColor = 'rgba(244, 114, 182, 0.34)',
@@ -80,6 +76,17 @@ const DrawingScreen = forwardRef(
       paperMarginLeft,
       showPaperMargin,
     });
+
+    const shouldDrawWithPointer = useCallback(
+      (event) => {
+        if (inputMode === 'stylusOnly') {
+          return event.pointerType === 'pen';
+        }
+
+        return true;
+      },
+      [inputMode]
+    );
 
     useEffect(() => {
       onStatusChangeRef.current = onStatusChange;
@@ -184,7 +191,6 @@ const DrawingScreen = forwardRef(
         const path = new Path2D(pathData);
 
         if (action.tool === 'eraser') {
-          // Tẩy chỉ xóa layer nét/ảnh, không làm mất nền ô kẻ.
           context.globalCompositeOperation = 'destination-out';
           context.fillStyle = '#000000';
           context.globalAlpha = 1;
@@ -201,6 +207,7 @@ const DrawingScreen = forwardRef(
       if (action.type === 'image' && action.imgNode) {
         context.globalCompositeOperation = 'source-over';
         context.globalAlpha = 1;
+
         context.drawImage(
           action.imgNode,
           action.x,
@@ -219,10 +226,8 @@ const DrawingScreen = forwardRef(
 
       const rect = canvas.getBoundingClientRect();
 
-      // 1. Vẽ nền giấy + ô kẻ trên canvas chính
       drawPaperBackground(context, rect);
 
-      // 2. Vẽ nét/ảnh trên layer riêng để tẩy không làm mất nền
       const contentCanvas = document.createElement('canvas');
       contentCanvas.width = canvas.width;
       contentCanvas.height = canvas.height;
@@ -245,7 +250,6 @@ const DrawingScreen = forwardRef(
         drawAction(contentContext, currentStrokeRef.current);
       }
 
-      // 3. Ghép layer nét/ảnh lên nền giấy
       context.globalCompositeOperation = 'source-over';
       context.globalAlpha = 1;
       context.drawImage(contentCanvas, 0, 0, rect.width, rect.height);
@@ -393,13 +397,18 @@ const DrawingScreen = forwardRef(
 
     const handlePointerDown = useCallback(
       (event) => {
-        if (inputMode === 'stylusOnly' && event.pointerType !== 'pen') return;
+        if (!shouldDrawWithPointer(event)) {
+          return;
+        }
+
         if (!event.isPrimary) return;
 
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         event.preventDefault();
+        event.stopPropagation();
+
         canvas.setPointerCapture?.(event.pointerId);
 
         const point = createPointFromEvent(event);
@@ -420,7 +429,7 @@ const DrawingScreen = forwardRef(
         queueRedraw();
       },
       [
-        inputMode,
+        shouldDrawWithPointer,
         tool,
         brushType,
         color,
@@ -434,10 +443,11 @@ const DrawingScreen = forwardRef(
     const handlePointerMove = useCallback(
       (event) => {
         if (!isDrawingRef.current || !currentStrokeRef.current) return;
-        if (inputMode === 'stylusOnly' && event.pointerType !== 'pen') return;
+        if (!shouldDrawWithPointer(event)) return;
         if (!event.isPrimary) return;
 
         event.preventDefault();
+        event.stopPropagation();
 
         const events = event.getCoalescedEvents?.() || [event];
 
@@ -450,15 +460,19 @@ const DrawingScreen = forwardRef(
 
         queueRedraw();
       },
-      [inputMode, createPointFromEvent, queueRedraw]
+      [shouldDrawWithPointer, createPointFromEvent, queueRedraw]
     );
 
     const finishCurrentStroke = useCallback(
       (event) => {
         if (!isDrawingRef.current) return;
 
-        event?.preventDefault?.();
-        canvasRef.current?.releasePointerCapture?.(event.pointerId);
+        if (event && shouldDrawWithPointer(event)) {
+          event.preventDefault?.();
+          event.stopPropagation?.();
+        }
+
+        canvasRef.current?.releasePointerCapture?.(event?.pointerId);
 
         isDrawingRef.current = false;
 
@@ -484,14 +498,16 @@ const DrawingScreen = forwardRef(
         currentStrokeRef.current = null;
         redrawCanvas();
       },
-      [redrawCanvas, updateStatus]
+      [redrawCanvas, updateStatus, shouldDrawWithPointer]
     );
 
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return undefined;
 
-      const preventTouch = (event) => event.preventDefault();
+      const preventTouch = (event) => {
+        event.preventDefault();
+      };
 
       canvas.addEventListener('pointerdown', handlePointerDown, true);
       canvas.addEventListener('pointermove', handlePointerMove, {
@@ -501,8 +517,15 @@ const DrawingScreen = forwardRef(
       canvas.addEventListener('pointerup', finishCurrentStroke, true);
       canvas.addEventListener('pointercancel', finishCurrentStroke, true);
       canvas.addEventListener('pointerleave', finishCurrentStroke, true);
-      canvas.addEventListener('touchstart', preventTouch, { passive: false });
-      canvas.addEventListener('touchmove', preventTouch, { passive: false });
+
+      if (inputMode !== 'stylusOnly') {
+        canvas.addEventListener('touchstart', preventTouch, {
+          passive: false,
+        });
+        canvas.addEventListener('touchmove', preventTouch, {
+          passive: false,
+        });
+      }
 
       return () => {
         canvas.removeEventListener('pointerdown', handlePointerDown, true);
@@ -510,37 +533,50 @@ const DrawingScreen = forwardRef(
         canvas.removeEventListener('pointerup', finishCurrentStroke, true);
         canvas.removeEventListener('pointercancel', finishCurrentStroke, true);
         canvas.removeEventListener('pointerleave', finishCurrentStroke, true);
-        canvas.removeEventListener('touchstart', preventTouch);
-        canvas.removeEventListener('touchmove', preventTouch);
+
+        if (inputMode !== 'stylusOnly') {
+          canvas.removeEventListener('touchstart', preventTouch);
+          canvas.removeEventListener('touchmove', preventTouch);
+        }
       };
-    }, [handlePointerDown, handlePointerMove, finishCurrentStroke]);
+    }, [
+      handlePointerDown,
+      handlePointerMove,
+      finishCurrentStroke,
+      inputMode,
+    ]);
 
     useImperativeHandle(
       ref,
       () => ({
         undo: () => {
-          if (historyRef.current.length <= 0) return;
+          const last = historyRef.current.pop();
+          if (!last) return;
 
-          redoHistoryRef.current.push(historyRef.current.pop());
+          redoHistoryRef.current.push(last);
+          currentStrokeRef.current = null;
+
           redrawCanvas();
           updateStatus();
         },
 
         redo: () => {
-          if (redoHistoryRef.current.length <= 0) return;
+          const next = redoHistoryRef.current.pop();
+          if (!next) return;
 
-          historyRef.current.push(redoHistoryRef.current.pop());
+          historyRef.current.push(next);
+          currentStrokeRef.current = null;
+
           redrawCanvas();
           updateStatus();
         },
 
         toDataURL: () => {
+          redrawCanvas();
           return canvasRef.current?.toDataURL('image/png') || '';
         },
 
-        getSceneData: () => {
-          return serializeSceneData(historyRef.current);
-        },
+        getSceneData: () => serializeSceneData(historyRef.current),
 
         importImageFile: async (file) => {
           const canvas = canvasRef.current;
@@ -551,6 +587,8 @@ const DrawingScreen = forwardRef(
 
           historyRef.current.push(imageAction);
           redoHistoryRef.current = [];
+          currentStrokeRef.current = null;
+
           redrawCanvas();
           updateStatus();
         },
@@ -561,13 +599,11 @@ const DrawingScreen = forwardRef(
     return (
       <canvas
         ref={canvasRef}
-        className={`h-full w-full touch-none ${
-          tool === 'eraser' ? 'cursor-cell' : 'cursor-crosshair'
-        }`}
+        className="block h-full w-full"
         style={{
-          display: 'block',
-          touchAction: 'none',
-          backgroundColor,
+          touchAction: inputMode === 'stylusOnly' ? 'auto' : 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
         }}
       />
     );

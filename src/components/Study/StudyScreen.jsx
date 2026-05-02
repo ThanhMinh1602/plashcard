@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useMotionValue, useTransform } from 'motion/react';
 import {
   FiArrowLeft,
@@ -7,8 +7,8 @@ import {
   FiRotateCw,
 } from 'react-icons/fi';
 
-const SWIPE_THRESHOLD = 120;
-const SWIPE_VELOCITY = 650;
+const SWIPE_THRESHOLD = 80;
+const SWIPE_VELOCITY = 500;
 
 function StudyCardFace({ src, side }) {
   return (
@@ -23,7 +23,7 @@ function StudyCardFace({ src, side }) {
         <img
           src={src}
           alt={side === 'front' ? 'Mặt trước flashcard' : 'Mặt sau flashcard'}
-          className="h-full w-full object-contain select-none"
+          className="h-full w-full select-none object-contain"
           draggable={false}
         />
       ) : (
@@ -50,11 +50,14 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
   const [flyOutDirection, setFlyOutDirection] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  const didDragRef = useRef(false);
+
   const x = useMotionValue(0);
   const tilt = useTransform(x, [-240, 0, 240], [-12, 0, 12]);
 
   const currentCard = normalizedCards[currentIndex];
   const previewCards = normalizedCards.slice(currentIndex + 1, currentIndex + 3);
+
   const flyOutDistance =
     typeof window !== 'undefined' ? window.innerWidth * 1.15 : 1400;
 
@@ -74,13 +77,22 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
     if (!flyOutDirection) return;
 
     const timer = setTimeout(() => {
-      const reachedEnd = currentIndex >= normalizedCards.length - 1;
+      setCurrentIndex((prev) => {
+        // Lướt qua trái: đi tới thẻ sau
+        if (flyOutDirection < 0) {
+          const nextIndex = prev + 1;
 
-      if (reachedEnd) {
-        setIsCompleted(true);
-      } else {
-        setCurrentIndex((prev) => prev + 1);
-      }
+          if (nextIndex >= normalizedCards.length) {
+            setIsCompleted(true);
+            return prev;
+          }
+
+          return nextIndex;
+        }
+
+        // Lướt qua phải: trở về thẻ trước
+        return Math.max(prev - 1, 0);
+      });
 
       setIsFlipped(false);
       setFlyOutDirection(0);
@@ -88,17 +100,49 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
     }, 260);
 
     return () => clearTimeout(timer);
-  }, [flyOutDirection, currentIndex, normalizedCards.length, x]);
+  }, [flyOutDirection, normalizedCards.length, x]);
+
+  const handleDragStart = () => {
+    didDragRef.current = true;
+  };
 
   const handleDragEnd = (_event, info) => {
     const passed =
       Math.abs(info.offset.x) > SWIPE_THRESHOLD ||
       Math.abs(info.velocity.x) > SWIPE_VELOCITY;
 
-    if (!passed) return;
+    if (!passed) {
+      x.set(0);
+      return;
+    }
 
-    const direction = info.offset.x > 0 || info.velocity.x > 0 ? 1 : -1;
+    let direction = 0;
+
+    // Ưu tiên hướng kéo thật sự của tay.
+    // offset.x < 0 nghĩa là lướt qua trái.
+    // offset.x > 0 nghĩa là lướt qua phải.
+    if (Math.abs(info.offset.x) > 8) {
+      direction = info.offset.x > 0 ? 1 : -1;
+    } else {
+      direction = info.velocity.x > 0 ? 1 : -1;
+    }
+
+    // Ở thẻ đầu tiên: lướt phải thì không có thẻ trước để quay lại
+    if (direction > 0 && currentIndex === 0) {
+      x.set(0);
+      return;
+    }
+
     setFlyOutDirection(direction);
+  };
+
+  const handleCardClick = () => {
+    if (didDragRef.current) {
+      didDragRef.current = false;
+      return;
+    }
+
+    setIsFlipped((prev) => !prev);
   };
 
   const handleRestart = () => {
@@ -115,10 +159,14 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
 
   if (!normalizedCards.length) {
     return (
-      <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(186,230,253,0.35),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.28),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] px-4 py-6 sm:px-6">
+      <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(186,230,253,0.35),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.28),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] px-4 py-6 sm:px-6 md:min-h-screen">
         <div className="mx-auto w-full max-w-6xl">
-          <div className="mb-6 grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl md:grid-cols-[auto_1fr] md:items-center">
-            <button className="soft-button h-11 rounded-2xl border border-white/70 bg-white/90 px-4 text-slate-700" onClick={onBack} type="button">
+          <div className="mb-6 grid gap-4 rounded-[24px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl md:grid-cols-[auto_1fr] md:items-center md:rounded-[28px]">
+            <button
+              className="soft-button h-11 rounded-2xl border border-white/70 bg-white/90 px-4 text-slate-700"
+              onClick={onBack}
+              type="button"
+            >
               <FiArrowLeft size={18} />
               <span>Quay lại</span>
             </button>
@@ -127,7 +175,9 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
               <h2 className="text-2xl font-black tracking-tight text-slate-800">
                 {packageItem?.name || 'Học thẻ'}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">Gói này chưa có thẻ nào để học.</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Gói này chưa có thẻ nào để học.
+              </p>
             </div>
           </div>
 
@@ -136,12 +186,17 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
               <h3 className="text-2xl font-black tracking-tight text-slate-800">
                 Chưa có thẻ để học
               </h3>
+
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 Hãy quay lại phần chỉnh sửa và tạo thẻ trước.
               </p>
 
               <div className="mt-6">
-                <button className="soft-button gradient-strong h-12 w-full rounded-2xl" onClick={onBack} type="button">
+                <button
+                  className="soft-button gradient-strong h-12 w-full rounded-2xl"
+                  onClick={onBack}
+                  type="button"
+                >
                   Quay lại danh sách gói
                 </button>
               </div>
@@ -153,28 +208,39 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(186,230,253,0.35),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.28),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] px-4 py-6 sm:px-6">
+    <div
+      className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(186,230,253,0.35),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.28),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] px-3 py-4 sm:px-6 sm:py-6 md:min-h-screen"
+      style={{ overscrollBehavior: 'none' }}
+    >
       <div className="mx-auto w-full max-w-6xl">
-        <div className="mb-6 grid gap-4 rounded-[28px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl md:grid-cols-[auto_1fr_auto] md:items-center">
-          <button className="soft-button h-11 rounded-2xl border border-white/70 bg-white/90 px-4 text-slate-700" onClick={onBack} type="button">
+        <div className="mb-4 grid gap-4 rounded-[24px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl sm:mb-6 md:grid-cols-[auto_1fr_auto] md:items-center md:rounded-[28px]">
+          <button
+            className="soft-button h-11 rounded-2xl border border-white/70 bg-white/90 px-4 text-slate-700"
+            onClick={onBack}
+            type="button"
+          >
             <FiArrowLeft size={18} />
             <span>Quay lại</span>
           </button>
 
           <div className="min-w-0">
-            <h2 className="truncate text-2xl font-black tracking-tight text-slate-800">
+            <h2 className="truncate text-xl font-black tracking-tight text-slate-800 sm:text-2xl">
               {packageItem?.name || 'Học thẻ'}
             </h2>
+
             <p className="mt-1 text-sm text-slate-500">
-              Chạm để lật · Kéo ngang để chuyển thẻ
+              Chạm để lật · Lướt trái để đi tới · Lướt phải để trở về
             </p>
           </div>
 
           <div className="w-full md:w-[220px]">
             <div className="mb-2 flex items-center justify-between text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
               <span>Tiến độ</span>
-              <span>{completedCount}/{normalizedCards.length}</span>
+              <span>
+                {completedCount}/{normalizedCards.length}
+              </span>
             </div>
+
             <div className="h-2 overflow-hidden rounded-full bg-slate-200/80">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-sky-400 via-blue-500 to-pink-400 transition-all duration-300"
@@ -186,7 +252,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
           </div>
         </div>
 
-        <div className="flex min-h-[calc(100vh-180px)] items-center justify-center">
+        <div className="flex min-h-[calc(100dvh-170px)] items-center justify-center pb-6 sm:min-h-[calc(100dvh-180px)] md:min-h-[calc(100vh-180px)]">
           {isCompleted ? (
             <motion.div
               className="soft-card w-full max-w-md px-6 py-8 text-center"
@@ -197,50 +263,63 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
               <div className="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
                 <FiCheckCircle size={38} />
               </div>
+
               <h3 className="text-3xl font-black tracking-tight text-slate-800">
                 Hoàn thành rồi 🎉
               </h3>
+
               <p className="mt-2 text-sm leading-6 text-slate-500">
                 Bạn đã học hết toàn bộ thẻ trong gói này.
               </p>
 
               <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-center">
-                <button className="soft-button h-11 rounded-2xl border border-slate-200 bg-slate-100 px-5 text-slate-700" onClick={onBack} type="button">
+                <button
+                  className="soft-button h-11 rounded-2xl border border-slate-200 bg-slate-100 px-5 text-slate-700"
+                  onClick={onBack}
+                  type="button"
+                >
                   Quay lại danh sách
                 </button>
-                <button className="soft-button gradient-strong h-11 rounded-2xl px-5" onClick={handleRestart} type="button">
+
+                <button
+                  className="soft-button gradient-strong h-11 rounded-2xl px-5"
+                  onClick={handleRestart}
+                  type="button"
+                >
                   <FiRefreshCw size={16} />
                   <span>Học lại từ đầu</span>
                 </button>
               </div>
             </motion.div>
           ) : (
-            <div className="relative w-full max-w-[430px]">
-              {[...previewCards]
-                .reverse()
-                .map((card, reverseIndex) => {
-                  const depth = previewCards.length - reverseIndex;
-                  const scale = 1 - depth * 0.04;
-                  const offsetY = depth * 14;
-                  const opacity = depth === 1 ? 0.2 : 0.12;
+            <div className="relative w-full max-w-[430px] sm:max-w-[480px] md:max-w-[540px]">
+              {[...previewCards].reverse().map((card, reverseIndex) => {
+                const depth = previewCards.length - reverseIndex;
+                const scale = 1 - depth * 0.04;
+                const offsetY = depth * 14;
+                const opacity = depth === 1 ? 0.2 : 0.12;
 
-                  return (
-                    <motion.div
-                      key={`${card._studyKey}-preview`}
-                      className="absolute inset-0 rounded-[30px] border border-white/60 bg-white/55 shadow-[0_16px_36px_rgba(148,163,184,0.12)]"
-                      animate={{
-                        y: offsetY,
-                        scale,
-                        opacity,
-                      }}
-                      transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-                    />
-                  );
-                })}
+                return (
+                  <motion.div
+                    key={`${card._studyKey}-preview`}
+                    className="absolute inset-0 rounded-[30px] border border-white/60 bg-white/55 shadow-[0_16px_36px_rgba(148,163,184,0.12)]"
+                    animate={{
+                      y: offsetY,
+                      scale,
+                      opacity,
+                    }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 320,
+                      damping: 28,
+                    }}
+                  />
+                );
+              })}
 
               <motion.div
                 key={currentCard._studyKey}
-                className="relative aspect-[5/7] w-full cursor-grab active:cursor-grabbing"
+                className="relative aspect-[5/7] w-full cursor-grab touch-pan-y select-none active:cursor-grabbing"
                 initial={{ opacity: 0, y: 20, scale: 0.96 }}
                 animate={
                   flyOutDirection
@@ -260,9 +339,10 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.16}
-                style={{ x, rotate: tilt }}
+                style={{ x, rotate: tilt, touchAction: 'pan-y' }}
+                onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
-                onClick={() => setIsFlipped((prev) => !prev)}
+                onClick={handleCardClick}
               >
                 <motion.div
                   className="relative h-full w-full [transform-style:preserve-3d]"
@@ -274,9 +354,11 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                 </motion.div>
               </motion.div>
 
-              <div className="mt-5 flex items-center justify-center gap-2 text-sm font-semibold text-slate-500">
-                <FiRotateCw size={16} />
-                <span>Chạm để lật thẻ · Kéo trái/phải để sang thẻ tiếp theo</span>
+              <div className="mt-5 flex items-center justify-center gap-2 text-center text-xs font-semibold text-slate-500 sm:text-sm">
+                <FiRotateCw size={16} className="shrink-0" />
+                <span>
+                  Chạm để lật thẻ · Lướt trái để đi tới · Lướt phải để trở về
+                </span>
               </div>
             </div>
           )}

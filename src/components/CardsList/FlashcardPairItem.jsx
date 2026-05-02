@@ -39,8 +39,9 @@ export default function FlashcardPairItem({
             <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
               Flashcard pair
             </div>
+
             <div className="text-sm font-semibold text-slate-600">
-              Chọn mặt trước hoặc mặt sau để thao tác
+              Tay: cuộn/zoom · Bút: viết
             </div>
           </div>
         </div>
@@ -56,7 +57,6 @@ export default function FlashcardPairItem({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {/* MẶT TRƯỚC */}
         <div
           className={cn(
             'rounded-[28px] border p-3 transition',
@@ -79,7 +79,7 @@ export default function FlashcardPairItem({
               size={toolbox.size}
               opacity={toolbox.opacity}
               backgroundColor={FRONT_PAPER_COLOR}
-              inputMode="all"
+              inputMode="stylusOnly"
               paperPattern="grid"
               paperGridSize={24}
               paperGridColor="rgba(14, 165, 233, 0.16)"
@@ -90,7 +90,6 @@ export default function FlashcardPairItem({
           </div>
         </div>
 
-        {/* MẶT SAU */}
         <div
           className={cn(
             'rounded-[28px] border p-3 transition',
@@ -113,7 +112,7 @@ export default function FlashcardPairItem({
               size={toolbox.size}
               opacity={toolbox.opacity}
               backgroundColor={BACK_PAPER_COLOR}
-              inputMode="all"
+              inputMode="stylusOnly"
               paperPattern="grid"
               paperGridSize={24}
               paperGridColor="rgba(236, 72, 153, 0.15)"
