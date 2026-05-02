@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FiFolder, FiFolderPlus, FiPackage, FiTrash2 } from 'react-icons/fi';
+import { FiFolder, FiFolderPlus, FiPackage, FiTrash2, FiEdit3 } from 'react-icons/fi';
 import { BsFolder2Open, BsPlayCircle } from 'react-icons/bs';
 import {
   deletePackage,
@@ -13,6 +13,7 @@ export default function PackageList({
   onAddPackage,
   onOpenPackage,
   onStudyPackage,
+  onDrawPackage,
 }) {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -104,14 +105,25 @@ export default function PackageList({
             </p>
           </div>
 
-          <button
-            className="soft-button gradient-primary h-12 rounded-2xl px-5 text-sm font-bold hover:-translate-y-0.5"
-            onClick={onAddPackage}
-            type="button"
-          >
-            <FiFolderPlus size={18} />
-            <span>Tạo gói mới</span>
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              className="soft-button gradient-primary h-12 rounded-2xl px-5 text-sm font-bold hover:-translate-y-0.5"
+              onClick={onAddPackage}
+              type="button"
+            >
+              <FiFolderPlus size={18} />
+              <span>Tạo gói mới</span>
+            </button>
+
+            <button
+              className="soft-button h-12 rounded-2xl px-5 text-sm font-bold border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:-translate-y-0.5"
+              onClick={onDrawPackage}
+              type="button"
+            >
+              <FiEdit3 size={18} />
+              <span>Bảng vẽ</span>
+            </button>
+          </div>
         </div>
 
         {error && <div className="status-error mb-6">{error}</div>}

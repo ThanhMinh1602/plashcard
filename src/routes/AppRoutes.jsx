@@ -9,6 +9,7 @@ import ForgotPassword from '../components/Auth/ForgotPassword';
 import PackageList from '../components/Packages/PackageList';
 import CardsList from '../components/CardsList/CardsList';
 import StudyScreen from '../components/Study/StudyScreen';
+import DrawingScreen from '../components/Drawing/DrawingScreen';
 
 import ProtectedRoute from './ProtectedRoute';
 
@@ -17,6 +18,7 @@ export default function AppRoutes({ user }) {
 
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [studyCards, setStudyCards] = useState([]);
+  const [isDrawing, setIsDrawing] = useState(false);
 
   const handleAddPackage = async () => {
     if (!user) return;
@@ -56,6 +58,17 @@ export default function AppRoutes({ user }) {
     setSelectedPackage(null);
     setStudyCards([]);
     navigate('/packages');
+  };
+
+  const handleDrawPackage = () => {
+    setIsDrawing(true);
+    navigate('/draw');
+  };
+
+  const handleSaveDrawing = (imageData, strokesData) => {
+    console.log('Drawing saved:', { imageData, strokesData });
+    setIsDrawing(false);
+    // You can store the drawing in localStorage or send to Firebase if needed
   };
 
   return (
@@ -105,6 +118,7 @@ export default function AppRoutes({ user }) {
               onAddPackage={handleAddPackage}
               onOpenPackage={handleOpenPackage}
               onStudyPackage={handleStudyPackage}
+              onDrawPackage={handleDrawPackage}
             />
           </ProtectedRoute>
         }
@@ -141,6 +155,18 @@ export default function AppRoutes({ user }) {
             ) : (
               <Navigate to="/packages" replace />
             )}
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/draw"
+        element={
+          <ProtectedRoute user={user}>
+            <DrawingScreen
+              onBack={handleBackToPackages}
+              onSave={handleSaveDrawing}
+            />
           </ProtectedRoute>
         }
       />
