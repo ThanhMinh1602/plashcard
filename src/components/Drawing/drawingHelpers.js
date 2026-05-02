@@ -1,418 +1,316 @@
-import React, {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from 'react';
-import {
-  CANVAS_SCALE,
-  appendSmoothPoint,
-  createImageActionFromFile,
-  getPointerPressure,
-  getStrokePathData,
-  hydrateSceneData,
-  loadImageNode,
-  serializeSceneData,
-} from './drawingHelpers';
+import { getStroke } from 'perfect-freehand';
 
-const DrawingScreen = forwardRef(
-  (
-    {
-      initialImage,
-      initialData,
-      tool = 'brush',
-      brushType = 'pen',
-      color = '#0f172a',
-      size = 4,
-      opacity = 1,
-      backgroundColor = '#ffffff',
-      inputMode = 'all', // all hoặc stylusOnly
-      onStatusChange,
+export const CANVAS_SCALE =
+  typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+
+export const getDynamicStrokeOptions = (brushType, size) => {
+  const safeSize = Math.max(Number(size) || 1, 1);
+
+  const baseOptions = {
+    size: safeSize,
+    thinning: 0.45,
+    smoothing: 0.78,
+    streamline: 0.65,
+    simulatePressure: true,
+    easing: (t) => t,
+    start: {
+      taper: safeSize * 0.8,
+      cap: true,
+      easing: (t) => t * t,
     },
-    ref
-  ) => {
-    const canvasRef = useRef(null);
-    const contextRef = useRef(null);
-    const isDrawingRef = useRef(false);
-    const historyRef = useRef([]);
-    const redoHistoryRef = useRef([]);
-    const currentStrokeRef = useRef(null);
-    const rafRef = useRef(null);
+    end: {
+      taper: safeSize * 1.6,
+      cap: true,
+      easing: (t) => 1 - Math.pow(1 - t, 3),
+    },
+  };
 
-    const updateStatus = useCallback(() => {
-      onStatusChange?.({
-        canUndo: historyRef.current.length > 0,
-        canRedo: redoHistoryRef.current.length > 0,
-      });
-    }, [onStatusChange]);
-
-    const drawAction = useCallback((context, action) => {
-      if (!action) return;
-
-      if (action.type === 'stroke') {
-        const pathData = getStrokePathData({
-          points: action.points,
-          brushType: action.brushType,
-          size: action.size,
-        });
-
-        if (!pathData) return;
-
-        const path = new Path2D(pathData);
-
-        if (action.tool === 'eraser') {
-          context.globalCompositeOperation = 'destination-out';
-          context.fillStyle = '#000000';
-          context.globalAlpha = 1;
-        } else {
-          context.globalCompositeOperation = 'source-over';
-          context.fillStyle = action.color;
-          context.globalAlpha = action.opacity;
-        }
-
-        context.fill(path);
-        return;
-      }
-
-      if (action.type === 'image' && action.imgNode) {
-        context.globalCompositeOperation = 'source-over';
-        context.globalAlpha = 1;
-        context.drawImage(
-          action.imgNode,
-          action.x,
-          action.y,
-          action.width,
-          action.height
-        );
-      }
-    }, []);
-
-    const redrawCanvas = useCallback(() => {
-      const canvas = canvasRef.current;
-      const context = contextRef.current;
-
-      if (!canvas || !context) return;
-
-      const rect = canvas.getBoundingClientRect();
-
-      context.globalCompositeOperation = 'source-over';
-      context.globalAlpha = 1;
-      context.fillStyle = backgroundColor;
-      context.fillRect(0, 0, rect.width, rect.height);
-
-      historyRef.current.forEach((action) => drawAction(context, action));
-
-      if (currentStrokeRef.current) {
-        drawAction(context, currentStrokeRef.current);
-      }
-
-      context.globalAlpha = 1;
-      context.globalCompositeOperation = 'source-over';
-    }, [backgroundColor, drawAction]);
-
-    const queueRedraw = useCallback(() => {
-      if (rafRef.current) return;
-
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        redrawCanvas();
-      });
-    }, [redrawCanvas]);
-
-    const setupCanvasSize = useCallback(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return null;
-
-      const rect = canvas.getBoundingClientRect();
-
-      canvas.width = Math.max(1, Math.floor(rect.width * CANVAS_SCALE));
-      canvas.height = Math.max(1, Math.floor(rect.height * CANVAS_SCALE));
-
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      context.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
-      context.lineCap = 'round';
-      context.lineJoin = 'round';
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
-
-      contextRef.current = context;
-
-      return rect;
-    }, []);
-
-    useEffect(() => {
-      let mounted = true;
-
-      const initCanvas = async () => {
-        const rect = setupCanvasSize();
-        if (!rect) return;
-
-        if (initialData) {
-          const hydrated = await hydrateSceneData(initialData);
-          if (!mounted) return;
-
-          historyRef.current = hydrated;
-          redoHistoryRef.current = [];
-          redrawCanvas();
-          updateStatus();
-          return;
-        }
-
-        if (initialImage) {
-          const imgNode = await loadImageNode(initialImage);
-          if (!mounted) return;
-
-          if (imgNode) {
-            historyRef.current = [
-              {
-                type: 'image',
-                dataUrl: initialImage,
-                x: 0,
-                y: 0,
-                width: rect.width,
-                height: rect.height,
-                imgNode,
-              },
-            ];
-          }
-
-          redoHistoryRef.current = [];
-          redrawCanvas();
-          updateStatus();
-          return;
-        }
-
-        historyRef.current = [];
-        redoHistoryRef.current = [];
-        redrawCanvas();
-        updateStatus();
+  switch (brushType) {
+    case 'pencil':
+      return {
+        ...baseOptions,
+        size: safeSize * 0.9,
+        thinning: 0.18,
+        smoothing: 0.9,
+        streamline: 0.72,
       };
 
-      initCanvas();
-
-      return () => {
-        mounted = false;
-
-        if (rafRef.current) {
-          cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
+    case 'marker':
+      return {
+        ...baseOptions,
+        size: safeSize * 1.55,
+        thinning: 0.03,
+        smoothing: 0.86,
+        streamline: 0.78,
+        start: { taper: 0, cap: true },
+        end: { taper: 0, cap: true },
       };
-    }, [initialData, initialImage, redrawCanvas, setupCanvasSize, updateStatus]);
 
-    useEffect(() => {
-      const canvas = canvasRef.current;
-      if (!canvas || typeof ResizeObserver === 'undefined') return undefined;
-
-      let firstResize = true;
-
-      const resizeObserver = new ResizeObserver(() => {
-        if (firstResize) {
-          firstResize = false;
-          return;
-        }
-
-        setupCanvasSize();
-        redrawCanvas();
-      });
-
-      resizeObserver.observe(canvas);
-
-      return () => resizeObserver.disconnect();
-    }, [redrawCanvas, setupCanvasSize]);
-
-    const createPointFromEvent = useCallback((event) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return null;
-
-      const rect = canvas.getBoundingClientRect();
-
-      return [
-        event.clientX - rect.left,
-        event.clientY - rect.top,
-        getPointerPressure(event),
-      ];
-    }, []);
-
-    const handlePointerDown = useCallback(
-      (event) => {
-        if (inputMode === 'stylusOnly' && event.pointerType !== 'pen') return;
-        if (!event.isPrimary) return;
-
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        event.preventDefault();
-        canvas.setPointerCapture?.(event.pointerId);
-
-        const point = createPointFromEvent(event);
-        if (!point) return;
-
-        isDrawingRef.current = true;
-        currentStrokeRef.current = {
-          type: 'stroke',
-          tool,
-          brushType,
-          color,
-          size,
-          opacity,
-          points: [point],
-        };
-
-        queueRedraw();
-      },
-      [
-        inputMode,
-        tool,
-        brushType,
-        color,
-        size,
-        opacity,
-        createPointFromEvent,
-        queueRedraw,
-      ]
-    );
-
-    const handlePointerMove = useCallback(
-      (event) => {
-        if (!isDrawingRef.current || !currentStrokeRef.current) return;
-        if (inputMode === 'stylusOnly' && event.pointerType !== 'pen') return;
-        if (!event.isPrimary) return;
-
-        event.preventDefault();
-
-        const events = event.getCoalescedEvents?.() || [event];
-
-        events.forEach((coalescedEvent) => {
-          const point = createPointFromEvent(coalescedEvent);
-          if (!point) return;
-
-          appendSmoothPoint(currentStrokeRef.current.points, point);
-        });
-
-        queueRedraw();
-      },
-      [inputMode, createPointFromEvent, queueRedraw]
-    );
-
-    const finishCurrentStroke = useCallback(
-      (event) => {
-        if (!isDrawingRef.current) return;
-
-        event?.preventDefault?.();
-        canvasRef.current?.releasePointerCapture?.(event.pointerId);
-
-        isDrawingRef.current = false;
-
-        const stroke = currentStrokeRef.current;
-
-        if (stroke) {
-          // Tap nhẹ vẫn tạo được một chấm tròn nhỏ.
-          if (stroke.points.length === 1) {
-            const [x, y, pressure] = stroke.points[0];
-            stroke.points.push([x + 0.01, y + 0.01, pressure]);
-          }
-
-          if (stroke.points.length > 1) {
-            historyRef.current.push({ ...stroke, points: [...stroke.points] });
-            redoHistoryRef.current = [];
-            updateStatus();
-          }
-        }
-
-        currentStrokeRef.current = null;
-        redrawCanvas();
-      },
-      [redrawCanvas, updateStatus]
-    );
-
-    useEffect(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return undefined;
-
-      const preventTouch = (event) => event.preventDefault();
-
-      canvas.addEventListener('pointerdown', handlePointerDown, true);
-      canvas.addEventListener('pointermove', handlePointerMove, {
-        passive: false,
-        capture: true,
-      });
-      canvas.addEventListener('pointerup', finishCurrentStroke, true);
-      canvas.addEventListener('pointercancel', finishCurrentStroke, true);
-      canvas.addEventListener('pointerleave', finishCurrentStroke, true);
-      canvas.addEventListener('touchstart', preventTouch, { passive: false });
-      canvas.addEventListener('touchmove', preventTouch, { passive: false });
-
-      return () => {
-        canvas.removeEventListener('pointerdown', handlePointerDown, true);
-        canvas.removeEventListener('pointermove', handlePointerMove, true);
-        canvas.removeEventListener('pointerup', finishCurrentStroke, true);
-        canvas.removeEventListener('pointercancel', finishCurrentStroke, true);
-        canvas.removeEventListener('pointerleave', finishCurrentStroke, true);
-        canvas.removeEventListener('touchstart', preventTouch);
-        canvas.removeEventListener('touchmove', preventTouch);
+    case 'calligraphy':
+      return {
+        ...baseOptions,
+        size: safeSize * 1.15,
+        thinning: 0.82,
+        smoothing: 0.88,
+        streamline: 0.7,
+        start: { taper: safeSize * 2.5, cap: true },
+        end: { taper: safeSize * 2.5, cap: true },
       };
-    }, [handlePointerDown, handlePointerMove, finishCurrentStroke]);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        undo: () => {
-          if (historyRef.current.length <= 0) return;
-
-          redoHistoryRef.current.push(historyRef.current.pop());
-          redrawCanvas();
-          updateStatus();
-        },
-
-        redo: () => {
-          if (redoHistoryRef.current.length <= 0) return;
-
-          historyRef.current.push(redoHistoryRef.current.pop());
-          redrawCanvas();
-          updateStatus();
-        },
-
-        toDataURL: () => {
-          return canvasRef.current?.toDataURL('image/png') || '';
-        },
-
-        getSceneData: () => {
-          return serializeSceneData(historyRef.current);
-        },
-
-        importImageFile: async (file) => {
-          const canvas = canvasRef.current;
-          if (!canvas || !file) return;
-
-          const rect = canvas.getBoundingClientRect();
-          const imageAction = await createImageActionFromFile(file, rect);
-
-          historyRef.current.push(imageAction);
-          redoHistoryRef.current = [];
-          redrawCanvas();
-          updateStatus();
-        },
-      }),
-      [redrawCanvas, updateStatus]
-    );
-
-    return (
-      <canvas
-        ref={canvasRef}
-        className={`h-full w-full touch-none ${
-          tool === 'eraser' ? 'cursor-cell' : 'cursor-crosshair'
-        }`}
-        style={{
-          display: 'block',
-          touchAction: 'none',
-        }}
-      />
-    );
+    case 'pen':
+    default:
+      return baseOptions;
   }
-);
+};
 
-DrawingScreen.displayName = 'DrawingScreen';
+export const getSvgPathFromStroke = (strokePoints) => {
+  if (!strokePoints?.length) return '';
 
-export default DrawingScreen;
+  const max = strokePoints.length - 1;
+
+  return strokePoints
+    .reduce(
+      (acc, point, index, arr) => {
+        const [x0, y0] = point;
+        const [x1, y1] = arr[index === max ? 0 : index + 1];
+
+        acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+        return acc;
+      },
+      ['M', strokePoints[0][0], strokePoints[0][1], 'Q']
+    )
+    .concat('Z')
+    .join(' ');
+};
+
+export const getStrokePathData = ({ points, brushType, size }) => {
+  const strokePoints = getStroke(
+    points,
+    getDynamicStrokeOptions(brushType, size)
+  );
+
+  if (strokePoints.length < 2) return '';
+
+  return getSvgPathFromStroke(strokePoints);
+};
+
+export const getPointerPressure = (event) => {
+  if (event.pointerType === 'mouse') return 0.5;
+
+  const pressure = Number(event.pressure) || 0.5;
+  return Math.min(Math.max(pressure, 0.12), 1);
+};
+
+export const getDistance = (a, b) => {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+
+  return Math.hypot(dx, dy);
+};
+
+export const appendSmoothPoint = (points, nextPoint) => {
+  const lastPoint = points[points.length - 1];
+
+  if (!lastPoint) {
+    points.push(nextPoint);
+    return;
+  }
+
+  const distance = getDistance(lastPoint, nextPoint);
+
+  if (distance < 0.7) return;
+
+  if (distance > 6) {
+    const steps = Math.min(8, Math.floor(distance / 3));
+
+    for (let i = 1; i < steps; i += 1) {
+      const t = i / steps;
+
+      points.push([
+        lastPoint[0] + (nextPoint[0] - lastPoint[0]) * t,
+        lastPoint[1] + (nextPoint[1] - lastPoint[1]) * t,
+        lastPoint[2] + (nextPoint[2] - lastPoint[2]) * t,
+      ]);
+    }
+  }
+
+  points.push(nextPoint);
+};
+
+export const drawGridPaperBackground = (
+  context,
+  {
+    width,
+    height,
+    backgroundColor = '#ffffff',
+    gridColor = 'rgba(100, 116, 139, 0.18)',
+    gridSize = 24,
+    bottomTintColor = '',
+    bottomTintRows = 0,
+  }
+) => {
+  context.save();
+
+  context.globalCompositeOperation = 'source-over';
+  context.globalAlpha = 1;
+
+  context.fillStyle = backgroundColor;
+  context.fillRect(0, 0, width, height);
+
+  // Vùng màu dưới cùng, tính theo số ô nhỏ.
+  // Ví dụ gridSize 24 và bottomTintRows 8 => cao 192px.
+  if (bottomTintColor && bottomTintRows > 0) {
+    const tintHeight = Math.min(height, gridSize * bottomTintRows);
+    const tintY = height - tintHeight;
+
+    context.fillStyle = bottomTintColor;
+    context.fillRect(0, tintY, width, tintHeight);
+  }
+
+  // Chỉ vẽ ô nhỏ đều nhau, không vẽ viền đậm ô lớn.
+  context.beginPath();
+  context.strokeStyle = gridColor;
+  context.lineWidth = 1;
+
+  for (let x = 0; x <= width; x += gridSize) {
+    context.moveTo(Math.round(x) + 0.5, 0);
+    context.lineTo(Math.round(x) + 0.5, height);
+  }
+
+  for (let y = 0; y <= height; y += gridSize) {
+    context.moveTo(0, Math.round(y) + 0.5);
+    context.lineTo(width, Math.round(y) + 0.5);
+  }
+
+  context.stroke();
+  context.restore();
+};
+
+export const drawRuledPaperBackground = (
+  context,
+  {
+    width,
+    height,
+    backgroundColor = '#ffffff',
+    lineColor = 'rgba(148, 163, 184, 0.36)',
+    marginLineColor = 'rgba(244, 114, 182, 0.34)',
+    lineSpacing = 30,
+    topPadding = 26,
+    marginLeft = 46,
+    showMargin = true,
+  }
+) => {
+  context.save();
+
+  context.globalCompositeOperation = 'source-over';
+  context.globalAlpha = 1;
+
+  context.fillStyle = backgroundColor;
+  context.fillRect(0, 0, width, height);
+
+  context.beginPath();
+  context.strokeStyle = lineColor;
+  context.lineWidth = 1;
+
+  for (let y = topPadding; y <= height; y += lineSpacing) {
+    context.moveTo(0, Math.round(y) + 0.5);
+    context.lineTo(width, Math.round(y) + 0.5);
+  }
+
+  context.stroke();
+
+  if (showMargin) {
+    context.beginPath();
+    context.strokeStyle = marginLineColor;
+    context.lineWidth = 1.2;
+    context.moveTo(Math.round(marginLeft) + 0.5, 0);
+    context.lineTo(Math.round(marginLeft) + 0.5, height);
+    context.stroke();
+  }
+
+  context.restore();
+};
+
+export const loadImageNode = (src) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+};
+
+export const hydrateSceneData = async (sceneData) => {
+  if (!sceneData) return [];
+
+  let parsed = [];
+
+  try {
+    parsed = typeof sceneData === 'string' ? JSON.parse(sceneData) : sceneData;
+  } catch (error) {
+    console.error('Lỗi parse initialData:', error);
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) return [];
+
+  const hydrated = await Promise.all(
+    parsed.map(async (action) => {
+      if (action?.type !== 'image' || !action.dataUrl) return action;
+
+      const imgNode = await loadImageNode(action.dataUrl);
+      return imgNode ? { ...action, imgNode } : action;
+    })
+  );
+
+  return hydrated.filter(Boolean);
+};
+
+export const serializeSceneData = (actions) => {
+  const dataToSave = actions.map((action) => {
+    const copy = { ...action };
+    delete copy.imgNode;
+    return copy;
+  });
+
+  return JSON.stringify(dataToSave);
+};
+
+export const createImageActionFromFile = (file, canvasRect) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = (event) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const scale = Math.min(
+          (canvasRect.width * 0.9) / img.width,
+          (canvasRect.height * 0.9) / img.height
+        );
+
+        const width = img.width * scale;
+        const height = img.height * scale;
+        const x = (canvasRect.width - width) / 2;
+        const y = (canvasRect.height - height) / 2;
+
+        resolve({
+          type: 'image',
+          dataUrl: event.target.result,
+          x,
+          y,
+          width,
+          height,
+          imgNode: img,
+        });
+      };
+
+      img.onerror = reject;
+      img.src = event.target.result;
+    };
+
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+};

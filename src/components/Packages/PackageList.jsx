@@ -114,15 +114,6 @@ export default function PackageList({
               <FiFolderPlus size={18} />
               <span>Tạo gói mới</span>
             </button>
-
-            <button
-              className="soft-button h-12 rounded-2xl px-5 text-sm font-bold border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:-translate-y-0.5"
-              onClick={onDrawPackage}
-              type="button"
-            >
-              <FiEdit3 size={18} />
-              <span>Bảng vẽ</span>
-            </button>
           </div>
         </div>
 
