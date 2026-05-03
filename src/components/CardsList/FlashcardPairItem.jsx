@@ -24,6 +24,9 @@ export default function FlashcardPairItem({
   const isFrontActive = activeCanvasKey === frontKey;
   const isBackActive = activeCanvasKey === backKey;
 
+  // Lấy ra đúng size muốn dùng cho thẻ
+  const currentSize = toolbox.tool === 'eraser' ? (toolbox.eraserSize || 20) : toolbox.size;
+
   return (
     <div
       ref={setPairCardRef(item.localId)}
@@ -76,7 +79,7 @@ export default function FlashcardPairItem({
               tool={toolbox.tool}
               brushType={toolbox.brushType}
               color={toolbox.color}
-              size={toolbox.size}
+              size={currentSize} // TRUYỀN BIẾN SIZE MỚI VÀO ĐÂY
               opacity={toolbox.opacity}
               backgroundColor={FRONT_PAPER_COLOR}
               inputMode="stylusOnly"
@@ -109,7 +112,7 @@ export default function FlashcardPairItem({
               tool={toolbox.tool}
               brushType={toolbox.brushType}
               color={toolbox.color}
-              size={toolbox.size}
+              size={currentSize} // TRUYỀN BIẾN SIZE MỚI VÀO ĐÂY
               opacity={toolbox.opacity}
               backgroundColor={BACK_PAPER_COLOR}
               inputMode="stylusOnly"

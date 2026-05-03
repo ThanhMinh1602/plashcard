@@ -13,22 +13,25 @@ const SWIPE_VELOCITY = 500;
 function StudyCardFace({ src, side }) {
   return (
     <div
-      className={`absolute inset-0 flex items-center justify-center overflow-hidden rounded-[30px] border shadow-[0_22px_46px_rgba(15,23,42,0.14)] backface-hidden ${
+      className={`absolute inset-0 flex items-center justify-center overflow-hidden rounded-[32px] border-4 backface-hidden transition-all ${
         side === 'front'
-          ? 'border-sky-100 bg-[linear-gradient(180deg,rgba(240,249,255,0.96),rgba(224,242,254,0.92))]'
-          : 'border-pink-100 bg-[linear-gradient(180deg,rgba(253,242,248,0.96),rgba(252,231,243,0.92))] [transform:rotateY(180deg)]'
+          ? 'border-white bg-[#f8fafc] shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18),inset_0_4px_6px_rgba(255,255,255,0.8),inset_0_-4px_12px_rgba(0,0,0,0.03)]'
+          : 'border-white bg-[#fdf2f8] shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18),inset_0_4px_6px_rgba(255,255,255,0.8),inset_0_-4px_12px_rgba(0,0,0,0.03)] [transform:rotateY(180deg)]'
       }`}
     >
       {src ? (
         <img
           src={src}
           alt={side === 'front' ? 'Mặt trước flashcard' : 'Mặt sau flashcard'}
-          className="h-full w-full select-none object-contain"
+          className="h-full w-full select-none object-contain p-2"
           draggable={false}
         />
       ) : (
-        <div className="text-sm font-bold text-slate-400">
-          {side === 'front' ? 'Mặt trước trống' : 'Mặt sau trống'}
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3">
+          <div className="h-16 w-16 rounded-full bg-slate-100/50 shadow-inner" />
+          <div className="text-sm font-bold text-slate-300">
+            {side === 'front' ? 'Mặt trước trống' : 'Mặt sau trống'}
+          </div>
         </div>
       )}
     </div>
@@ -78,7 +81,6 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
 
     const timer = setTimeout(() => {
       setCurrentIndex((prev) => {
-        // Lướt qua trái: đi tới thẻ sau
         if (flyOutDirection < 0) {
           const nextIndex = prev + 1;
 
@@ -90,7 +92,6 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
           return nextIndex;
         }
 
-        // Lướt qua phải: trở về thẻ trước
         return Math.max(prev - 1, 0);
       });
 
@@ -118,16 +119,12 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
 
     let direction = 0;
 
-    // Ưu tiên hướng kéo thật sự của tay.
-    // offset.x < 0 nghĩa là lướt qua trái.
-    // offset.x > 0 nghĩa là lướt qua phải.
     if (Math.abs(info.offset.x) > 8) {
       direction = info.offset.x > 0 ? 1 : -1;
     } else {
       direction = info.velocity.x > 0 ? 1 : -1;
     }
 
-    // Ở thẻ đầu tiên: lướt phải thì không có thẻ trước để quay lại
     if (direction > 0 && currentIndex === 0) {
       x.set(0);
       return;
@@ -302,7 +299,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                 return (
                   <motion.div
                     key={`${card._studyKey}-preview`}
-                    className="absolute inset-0 rounded-[30px] border border-white/60 bg-white/55 shadow-[0_16px_36px_rgba(148,163,184,0.12)]"
+                    className="absolute inset-0 rounded-[32px] border border-white/60 bg-white/55 shadow-[0_16px_36px_rgba(148,163,184,0.12)]"
                     animate={{
                       y: offsetY,
                       scale,

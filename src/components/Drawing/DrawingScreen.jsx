@@ -33,13 +33,10 @@ const DrawingScreen = forwardRef(
       onStatusChange,
 
       paperPattern = 'grid',
-
       paperGridSize = 24,
       paperGridColor = 'rgba(100, 116, 139, 0.18)',
-
       paperBottomTintColor = '',
       paperBottomTintRows = 0,
-
       paperLineSpacing = 30,
       paperLineColor = 'rgba(148, 163, 184, 0.36)',
       paperMarginLineColor = 'rgba(244, 114, 182, 0.34)',
@@ -50,6 +47,11 @@ const DrawingScreen = forwardRef(
   ) => {
     const canvasRef = useRef(null);
     const contextRef = useRef(null);
+
+    const historyCanvasRef = useRef(null);
+    const historyContextRef = useRef(null);
+    const activeLayerCanvasRef = useRef(null);
+    const activeLayerContextRef = useRef(null);
 
     const isDrawingRef = useRef(false);
     const historyRef = useRef([]);
@@ -63,13 +65,10 @@ const DrawingScreen = forwardRef(
 
     const paperConfigRef = useRef({
       paperPattern,
-
       paperGridSize,
       paperGridColor,
-
       paperBottomTintColor,
       paperBottomTintRows,
-
       paperLineSpacing,
       paperLineColor,
       paperMarginLineColor,
@@ -82,7 +81,6 @@ const DrawingScreen = forwardRef(
         if (inputMode === 'stylusOnly') {
           return event.pointerType === 'pen';
         }
-
         return true;
       },
       [inputMode]
@@ -99,36 +97,15 @@ const DrawingScreen = forwardRef(
 
     useEffect(() => {
       paperConfigRef.current = {
-        paperPattern,
-
-        paperGridSize,
-        paperGridColor,
-
-        paperBottomTintColor,
-        paperBottomTintRows,
-
-        paperLineSpacing,
-        paperLineColor,
-        paperMarginLineColor,
-        paperMarginLeft,
-        showPaperMargin,
+        paperPattern, paperGridSize, paperGridColor, paperBottomTintColor,
+        paperBottomTintRows, paperLineSpacing, paperLineColor,
+        paperMarginLineColor, paperMarginLeft, showPaperMargin,
       };
-
       redrawCanvasRef.current?.();
     }, [
-      paperPattern,
-
-      paperGridSize,
-      paperGridColor,
-
-      paperBottomTintColor,
-      paperBottomTintRows,
-
-      paperLineSpacing,
-      paperLineColor,
-      paperMarginLineColor,
-      paperMarginLeft,
-      showPaperMargin,
+      paperPattern, paperGridSize, paperGridColor, paperBottomTintColor,
+      paperBottomTintRows, paperLineSpacing, paperLineColor,
+      paperMarginLineColor, paperMarginLeft, showPaperMargin,
     ]);
 
     const updateStatus = useCallback(() => {
@@ -140,36 +117,22 @@ const DrawingScreen = forwardRef(
 
     const drawPaperBackground = useCallback((context, rect) => {
       const config = paperConfigRef.current;
-
       if (config.paperPattern === 'grid') {
         drawGridPaperBackground(context, {
-          width: rect.width,
-          height: rect.height,
-          backgroundColor: backgroundColorRef.current,
-          gridColor: config.paperGridColor,
-          gridSize: config.paperGridSize,
-          bottomTintColor: config.paperBottomTintColor,
-          bottomTintRows: config.paperBottomTintRows,
+          width: rect.width, height: rect.height, backgroundColor: backgroundColorRef.current,
+          gridColor: config.paperGridColor, gridSize: config.paperGridSize,
+          bottomTintColor: config.paperBottomTintColor, bottomTintRows: config.paperBottomTintRows,
         });
-
         return;
       }
-
       if (config.paperPattern === 'ruled') {
         drawRuledPaperBackground(context, {
-          width: rect.width,
-          height: rect.height,
-          backgroundColor: backgroundColorRef.current,
-          lineColor: config.paperLineColor,
-          marginLineColor: config.paperMarginLineColor,
-          lineSpacing: config.paperLineSpacing,
-          marginLeft: config.paperMarginLeft,
-          showMargin: config.showPaperMargin,
+          width: rect.width, height: rect.height, backgroundColor: backgroundColorRef.current,
+          lineColor: config.paperLineColor, marginLineColor: config.paperMarginLineColor,
+          lineSpacing: config.paperLineSpacing, marginLeft: config.paperMarginLeft, showMargin: config.showPaperMargin,
         });
-
         return;
       }
-
       context.globalCompositeOperation = 'source-over';
       context.globalAlpha = 1;
       context.fillStyle = backgroundColorRef.current;
@@ -178,18 +141,12 @@ const DrawingScreen = forwardRef(
 
     const drawAction = useCallback((context, action) => {
       if (!action) return;
-
       if (action.type === 'stroke') {
         const pathData = getStrokePathData({
-          points: action.points,
-          brushType: action.brushType,
-          size: action.size,
+          points: action.points, brushType: action.brushType, size: action.size,
         });
-
         if (!pathData) return;
-
         const path = new Path2D(pathData);
-
         if (action.tool === 'eraser') {
           context.globalCompositeOperation = 'destination-out';
           context.fillStyle = '#000000';
@@ -199,66 +156,51 @@ const DrawingScreen = forwardRef(
           context.fillStyle = action.color;
           context.globalAlpha = action.opacity;
         }
-
         context.fill(path);
         return;
       }
-
       if (action.type === 'image' && action.imgNode) {
         context.globalCompositeOperation = 'source-over';
         context.globalAlpha = 1;
-
-        context.drawImage(
-          action.imgNode,
-          action.x,
-          action.y,
-          action.width,
-          action.height
-        );
+        context.drawImage(action.imgNode, action.x, action.y, action.width, action.height);
       }
     }, []);
 
-    const redrawCanvas = useCallback(() => {
-      const canvas = canvasRef.current;
-      const context = contextRef.current;
-
+    const renderHistoryToCache = useCallback(() => {
+      const canvas = historyCanvasRef.current;
+      const context = historyContextRef.current;
       if (!canvas || !context) return;
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      historyRef.current.forEach((action) => drawAction(context, action));
+    }, [drawAction]);
 
-      // SỬA LỖI: Dùng offsetWidth/Height thay vì getBoundingClientRect
-      const width = canvas.offsetWidth;
-      const height = canvas.offsetHeight;
+    const redrawCanvas = useCallback(() => {
+      const mainCanvas = canvasRef.current;
+      const mainContext = contextRef.current;
+      const historyCanvas = historyCanvasRef.current;
+      const activeCanvas = activeLayerCanvasRef.current;
+      const activeContext = activeLayerContextRef.current;
+
+      if (!mainCanvas || !mainContext || !historyCanvas || !activeCanvas || !activeContext) return;
+
+      const width = mainCanvas.offsetWidth;
+      const height = mainCanvas.offsetHeight;
       const logicalRect = { width, height };
 
-      drawPaperBackground(context, logicalRect);
-
-      const contentCanvas = document.createElement('canvas');
-      contentCanvas.width = canvas.width;
-      contentCanvas.height = canvas.height;
-
-      const contentContext = contentCanvas.getContext('2d', {
-        willReadFrequently: true,
-      });
-
-      contentContext.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
-      contentContext.lineCap = 'round';
-      contentContext.lineJoin = 'round';
-      contentContext.imageSmoothingEnabled = true;
-      contentContext.imageSmoothingQuality = 'high';
-
-      historyRef.current.forEach((action) => {
-        drawAction(contentContext, action);
-      });
+      drawPaperBackground(mainContext, logicalRect);
+      mainContext.globalCompositeOperation = 'source-over';
+      mainContext.globalAlpha = 1;
 
       if (currentStrokeRef.current) {
-        drawAction(contentContext, currentStrokeRef.current);
+        activeContext.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
+        activeContext.globalCompositeOperation = 'source-over';
+        activeContext.globalAlpha = 1;
+        activeContext.drawImage(historyCanvas, 0, 0);
+        drawAction(activeContext, currentStrokeRef.current);
+        mainContext.drawImage(activeCanvas, 0, 0, width, height);
+      } else {
+        mainContext.drawImage(historyCanvas, 0, 0, width, height);
       }
-
-      context.globalCompositeOperation = 'source-over';
-      context.globalAlpha = 1;
-      context.drawImage(contentCanvas, 0, 0, width, height); // Vẽ theo kích thước logic
-
-      context.globalAlpha = 1;
-      context.globalCompositeOperation = 'source-over';
     }, [drawAction, drawPaperBackground]);
 
     useEffect(() => {
@@ -267,7 +209,6 @@ const DrawingScreen = forwardRef(
 
     const queueRedraw = useCallback(() => {
       if (rafRef.current) return;
-
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
         redrawCanvas();
@@ -278,29 +219,49 @@ const DrawingScreen = forwardRef(
       const canvas = canvasRef.current;
       if (!canvas) return null;
 
-      // SỬA LỖI: Dùng kích thước thực tế chưa qua CSS transform
       const width = canvas.offsetWidth;
       const height = canvas.offsetHeight;
+      
+      const scaledWidth = Math.max(1, Math.floor(width * CANVAS_SCALE));
+      const scaledHeight = Math.max(1, Math.floor(height * CANVAS_SCALE));
 
-      canvas.width = Math.max(1, Math.floor(width * CANVAS_SCALE));
-      canvas.height = Math.max(1, Math.floor(height * CANVAS_SCALE));
+      canvas.width = scaledWidth;
+      canvas.height = scaledHeight;
 
       const context = canvas.getContext('2d', { willReadFrequently: true });
-
       context.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
       context.lineCap = 'round';
       context.lineJoin = 'round';
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = 'high';
-
       contextRef.current = context;
+
+      const initOffscreen = (cvsRef, ctxRef) => {
+        let cvs = cvsRef.current;
+        if (!cvs) {
+          cvs = document.createElement('canvas');
+          cvsRef.current = cvs;
+        }
+        cvs.width = scaledWidth;
+        cvs.height = scaledHeight;
+        
+        const ctx = cvs.getContext('2d', { willReadFrequently: true });
+        ctx.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctxRef.current = ctx;
+      };
+
+      initOffscreen(historyCanvasRef, historyContextRef);
+      initOffscreen(activeLayerCanvasRef, activeLayerContextRef);
 
       return { width, height };
     }, []);
 
     useEffect(() => {
       let mounted = true;
-
       const initCanvas = async () => {
         const rect = setupCanvasSize();
         if (!rect) return;
@@ -308,11 +269,10 @@ const DrawingScreen = forwardRef(
         if (initialData) {
           const hydrated = await hydrateSceneData(initialData);
           if (!mounted) return;
-
           historyRef.current = hydrated;
           redoHistoryRef.current = [];
           currentStrokeRef.current = null;
-
+          renderHistoryToCache();
           redrawCanvas();
           updateStatus();
           return;
@@ -321,26 +281,17 @@ const DrawingScreen = forwardRef(
         if (initialImage) {
           const imgNode = await loadImageNode(initialImage);
           if (!mounted) return;
-
           if (imgNode) {
-            historyRef.current = [
-              {
-                type: 'image',
-                dataUrl: initialImage,
-                x: 0,
-                y: 0,
-                width: rect.width,
-                height: rect.height,
-                imgNode,
-              },
-            ];
+            historyRef.current = [{
+              type: 'image', dataUrl: initialImage, x: 0, y: 0,
+              width: rect.width, height: rect.height, imgNode,
+            }];
           } else {
             historyRef.current = [];
           }
-
           redoHistoryRef.current = [];
           currentStrokeRef.current = null;
-
+          renderHistoryToCache();
           redrawCanvas();
           updateStatus();
           return;
@@ -349,27 +300,28 @@ const DrawingScreen = forwardRef(
         historyRef.current = [];
         redoHistoryRef.current = [];
         currentStrokeRef.current = null;
-
+        renderHistoryToCache();
         redrawCanvas();
         updateStatus();
       };
 
       initCanvas();
-
       return () => {
         mounted = false;
-
         if (rafRef.current) {
           cancelAnimationFrame(rafRef.current);
           rafRef.current = null;
         }
       };
-    }, [initialData, initialImage, setupCanvasSize, redrawCanvas, updateStatus]);
+    }, [initialData, initialImage, setupCanvasSize, renderHistoryToCache, redrawCanvas, updateStatus]);
 
+    // CHẶN BUG RESIZE OBSERVER (Nguyên nhân làm hư nét bút)
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas || typeof ResizeObserver === 'undefined') return undefined;
 
+      let prevW = canvas.offsetWidth;
+      let prevH = canvas.offsetHeight;
       let firstResize = true;
 
       const resizeObserver = new ResizeObserver(() => {
@@ -377,26 +329,31 @@ const DrawingScreen = forwardRef(
           firstResize = false;
           return;
         }
+        
+        const currentW = canvas.offsetWidth;
+        const currentH = canvas.offsetHeight;
+        
+        // Nếu chênh lệch quá nhỏ (sub-pixel do transition) thì hủy lệnh vẽ lại
+        if (currentW === prevW && currentH === prevH) return;
+        
+        prevW = currentW;
+        prevH = currentH;
 
         setupCanvasSize();
+        renderHistoryToCache();
         redrawCanvas();
       });
 
       resizeObserver.observe(canvas);
-
       return () => resizeObserver.disconnect();
-    }, [setupCanvasSize, redrawCanvas]);
+    }, [setupCanvasSize, renderHistoryToCache, redrawCanvas]);
 
     const createPointFromEvent = useCallback((event) => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
-
       const rect = canvas.getBoundingClientRect();
-      
-      // SỬA LỖI: Cân bằng tỷ lệ tọa độ nếu Canvas bị zoom bởi thư viện cha
       const scaleX = rect.width > 0 ? canvas.offsetWidth / rect.width : 1;
       const scaleY = rect.height > 0 ? canvas.offsetHeight / rect.height : 1;
-
       return [
         (event.clientX - rect.left) * scaleX,
         (event.clientY - rect.top) * scaleY,
@@ -404,53 +361,29 @@ const DrawingScreen = forwardRef(
       ];
     }, []);
 
-    const handlePointerDown = useCallback(
-      (event) => {
-        if (!shouldDrawWithPointer(event)) {
-          return;
-        }
-
+    const handlePointerDown = useCallback((event) => {
+        if (!shouldDrawWithPointer(event)) return;
         if (!event.isPrimary) return;
-
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         event.preventDefault();
         event.stopPropagation();
-
         canvas.setPointerCapture?.(event.pointerId);
 
         const point = createPointFromEvent(event);
         if (!point) return;
 
         isDrawingRef.current = true;
-
         currentStrokeRef.current = {
-          type: 'stroke',
-          tool,
-          brushType,
-          color,
-          size,
-          opacity,
-          points: [point],
+          type: 'stroke', tool, brushType, color, size, opacity, points: [point],
         };
-
         queueRedraw();
       },
-      [
-        shouldDrawWithPointer,
-        tool,
-        brushType,
-        color,
-        size,
-        opacity,
-        createPointFromEvent,
-        queueRedraw,
-      ]
+      [shouldDrawWithPointer, tool, brushType, color, size, opacity, createPointFromEvent, queueRedraw]
     );
 
-    const handlePointerMove = useCallback(
-      (event) => {
+    const handlePointerMove = useCallback((event) => {
         if (!isDrawingRef.current || !currentStrokeRef.current) return;
         if (!shouldDrawWithPointer(event)) return;
         if (!event.isPrimary) return;
@@ -459,81 +392,59 @@ const DrawingScreen = forwardRef(
         event.stopPropagation();
 
         const events = event.getCoalescedEvents?.() || [event];
-
         events.forEach((coalescedEvent) => {
           const point = createPointFromEvent(coalescedEvent);
           if (!point) return;
-
           appendSmoothPoint(currentStrokeRef.current.points, point);
         });
-
         queueRedraw();
       },
       [shouldDrawWithPointer, createPointFromEvent, queueRedraw]
     );
 
-    const finishCurrentStroke = useCallback(
-      (event) => {
+    const finishCurrentStroke = useCallback((event) => {
         if (!isDrawingRef.current) return;
-
         if (event && shouldDrawWithPointer(event)) {
           event.preventDefault?.();
           event.stopPropagation?.();
         }
-
         canvasRef.current?.releasePointerCapture?.(event?.pointerId);
-
         isDrawingRef.current = false;
 
         const stroke = currentStrokeRef.current;
-
         if (stroke) {
           if (stroke.points.length === 1) {
             const [x, y, pressure] = stroke.points[0];
             stroke.points.push([x + 0.01, y + 0.01, pressure]);
           }
-
           if (stroke.points.length > 1) {
-            historyRef.current.push({
-              ...stroke,
-              points: [...stroke.points],
-            });
-
+            historyRef.current.push({ ...stroke, points: [...stroke.points] });
             redoHistoryRef.current = [];
             updateStatus();
           }
         }
-
         currentStrokeRef.current = null;
+        renderHistoryToCache();
         redrawCanvas();
       },
-      [redrawCanvas, updateStatus, shouldDrawWithPointer]
+      [renderHistoryToCache, redrawCanvas, updateStatus, shouldDrawWithPointer]
     );
 
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return undefined;
-
       const preventTouch = (event) => {
         event.preventDefault();
       };
-
       canvas.addEventListener('pointerdown', handlePointerDown, true);
-      canvas.addEventListener('pointermove', handlePointerMove, {
-        passive: false,
-        capture: true,
-      });
+      canvas.addEventListener('pointermove', handlePointerMove, { passive: false, capture: true });
       canvas.addEventListener('pointerup', finishCurrentStroke, true);
       canvas.addEventListener('pointercancel', finishCurrentStroke, true);
       canvas.addEventListener('pointerleave', finishCurrentStroke, true);
 
       if (inputMode !== 'stylusOnly') {
-        canvas.addEventListener('touchstart', preventTouch, {
-          passive: false,
-        });
-        canvas.addEventListener('touchmove', preventTouch, {
-          passive: false,
-        });
+        canvas.addEventListener('touchstart', preventTouch, { passive: false });
+        canvas.addEventListener('touchmove', preventTouch, { passive: false });
       }
 
       return () => {
@@ -542,81 +453,64 @@ const DrawingScreen = forwardRef(
         canvas.removeEventListener('pointerup', finishCurrentStroke, true);
         canvas.removeEventListener('pointercancel', finishCurrentStroke, true);
         canvas.removeEventListener('pointerleave', finishCurrentStroke, true);
-
         if (inputMode !== 'stylusOnly') {
           canvas.removeEventListener('touchstart', preventTouch);
           canvas.removeEventListener('touchmove', preventTouch);
         }
       };
-    }, [
-      handlePointerDown,
-      handlePointerMove,
-      finishCurrentStroke,
-      inputMode,
-    ]);
+    }, [handlePointerDown, handlePointerMove, finishCurrentStroke, inputMode]);
 
-    useImperativeHandle(
-      ref,
-      () => ({
+    useImperativeHandle(ref, () => ({
         undo: () => {
           const last = historyRef.current.pop();
           if (!last) return;
-
           redoHistoryRef.current.push(last);
           currentStrokeRef.current = null;
-
+          renderHistoryToCache();
           redrawCanvas();
           updateStatus();
         },
-
         redo: () => {
           const next = redoHistoryRef.current.pop();
           if (!next) return;
-
           historyRef.current.push(next);
           currentStrokeRef.current = null;
-
+          renderHistoryToCache();
           redrawCanvas();
           updateStatus();
         },
-
         toDataURL: () => {
           redrawCanvas();
           return canvasRef.current?.toDataURL('image/png') || '';
         },
-
         getSceneData: () => serializeSceneData(historyRef.current),
-
         importImageFile: async (file) => {
           const canvas = canvasRef.current;
           if (!canvas || !file) return;
-
-          // SỬA LỖI: Tránh méo ảnh khi import lúc đang zoom
-          const logicalRect = { 
-            width: canvas.offsetWidth, 
-            height: canvas.offsetHeight 
-          };
+          const logicalRect = { width: canvas.offsetWidth, height: canvas.offsetHeight };
           const imageAction = await createImageActionFromFile(file, logicalRect);
-
           historyRef.current.push(imageAction);
           redoHistoryRef.current = [];
           currentStrokeRef.current = null;
-
+          renderHistoryToCache();
           redrawCanvas();
           updateStatus();
         },
       }),
-      [redrawCanvas, updateStatus]
+      [renderHistoryToCache, redrawCanvas, updateStatus]
     );
 
+    // CHẶN DOUBLE-TAP ZOOM (Thủ phạm chính)
     return (
       <canvas
         ref={canvasRef}
         className="block h-full w-full"
         style={{
-          touchAction: inputMode === 'stylusOnly' ? 'auto' : 'none',
+          // Đổi thành 'manipulation' để vẫn cho cuộn nhưng cấm iPad zoom khi chạm tay đúp vào
+          touchAction: inputMode === 'stylusOnly' ? 'manipulation' : 'none', 
           userSelect: 'none',
           WebkitUserSelect: 'none',
+          WebkitTouchCallout: 'none',
         }}
       />
     );

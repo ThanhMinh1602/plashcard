@@ -25,6 +25,7 @@ export const DEFAULT_TOOLBOX = {
   tool: 'brush',
   brushType: 'pen',
   color: '#0f172a',
+  eraserSize: 20,
   size: 4,
   opacity: 1,
 };
