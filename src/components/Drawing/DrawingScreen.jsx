@@ -224,9 +224,12 @@ const DrawingScreen = forwardRef(
 
       if (!canvas || !context) return;
 
-      const rect = canvas.getBoundingClientRect();
+      // SỬA LỖI: Dùng offsetWidth/Height thay vì getBoundingClientRect
+      const width = canvas.offsetWidth;
+      const height = canvas.offsetHeight;
+      const logicalRect = { width, height };
 
-      drawPaperBackground(context, rect);
+      drawPaperBackground(context, logicalRect);
 
       const contentCanvas = document.createElement('canvas');
       contentCanvas.width = canvas.width;
@@ -252,7 +255,7 @@ const DrawingScreen = forwardRef(
 
       context.globalCompositeOperation = 'source-over';
       context.globalAlpha = 1;
-      context.drawImage(contentCanvas, 0, 0, rect.width, rect.height);
+      context.drawImage(contentCanvas, 0, 0, width, height); // Vẽ theo kích thước logic
 
       context.globalAlpha = 1;
       context.globalCompositeOperation = 'source-over';
@@ -275,10 +278,12 @@ const DrawingScreen = forwardRef(
       const canvas = canvasRef.current;
       if (!canvas) return null;
 
-      const rect = canvas.getBoundingClientRect();
+      // SỬA LỖI: Dùng kích thước thực tế chưa qua CSS transform
+      const width = canvas.offsetWidth;
+      const height = canvas.offsetHeight;
 
-      canvas.width = Math.max(1, Math.floor(rect.width * CANVAS_SCALE));
-      canvas.height = Math.max(1, Math.floor(rect.height * CANVAS_SCALE));
+      canvas.width = Math.max(1, Math.floor(width * CANVAS_SCALE));
+      canvas.height = Math.max(1, Math.floor(height * CANVAS_SCALE));
 
       const context = canvas.getContext('2d', { willReadFrequently: true });
 
@@ -290,7 +295,7 @@ const DrawingScreen = forwardRef(
 
       contextRef.current = context;
 
-      return rect;
+      return { width, height };
     }, []);
 
     useEffect(() => {
@@ -387,10 +392,14 @@ const DrawingScreen = forwardRef(
       if (!canvas) return null;
 
       const rect = canvas.getBoundingClientRect();
+      
+      // SỬA LỖI: Cân bằng tỷ lệ tọa độ nếu Canvas bị zoom bởi thư viện cha
+      const scaleX = rect.width > 0 ? canvas.offsetWidth / rect.width : 1;
+      const scaleY = rect.height > 0 ? canvas.offsetHeight / rect.height : 1;
 
       return [
-        event.clientX - rect.left,
-        event.clientY - rect.top,
+        (event.clientX - rect.left) * scaleX,
+        (event.clientY - rect.top) * scaleY,
         getPointerPressure(event),
       ];
     }, []);
@@ -582,8 +591,12 @@ const DrawingScreen = forwardRef(
           const canvas = canvasRef.current;
           if (!canvas || !file) return;
 
-          const rect = canvas.getBoundingClientRect();
-          const imageAction = await createImageActionFromFile(file, rect);
+          // SỬA LỖI: Tránh méo ảnh khi import lúc đang zoom
+          const logicalRect = { 
+            width: canvas.offsetWidth, 
+            height: canvas.offsetHeight 
+          };
+          const imageAction = await createImageActionFromFile(file, logicalRect);
 
           historyRef.current.push(imageAction);
           redoHistoryRef.current = [];

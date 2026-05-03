@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import ConfirmModal from '../Common/ConfirmModal';
 import {
   getFlashcards,
@@ -12,15 +12,9 @@ import CardsEditorHeader from './CardsEditorHeader';
 import CardsEditorToolbar from './CardsEditorToolbar';
 import CardsEmptyState from './CardsEmptyState';
 import FlashcardPairItem from './FlashcardPairItem';
-import {
-  DEFAULT_TOOLBOX,
-  createLocalCard,
-} from './constants';
+import { DEFAULT_TOOLBOX, createLocalCard, cn } from './constants';
 import usePackageEditor from './hooks/usePackageEditor';
 import useCanvasRegistry from './hooks/useCanvasRegistry';
-
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
-import { FiZoomIn, FiZoomOut, FiMaximize } from 'react-icons/fi';
 
 export default function CardsList({
   user,
@@ -36,6 +30,9 @@ export default function CardsList({
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isDeletingCard, setIsDeletingCard] = useState(false);
   const [toolbox, setToolbox] = useState(DEFAULT_TOOLBOX);
+
+  const [currentEditId, setCurrentEditId] = useState(null);
+  const thumbnailListRef = useRef(null);
 
   const {
     packageName,
@@ -69,7 +66,6 @@ export default function CardsList({
     getCanvasRefByKey,
     setPairCardRef,
     handleCanvasStatusChange,
-    queueScrollToCard,
     removeCardBindings,
   } = useCanvasRegistry({
     cards,
@@ -77,6 +73,74 @@ export default function CardsList({
   });
 
   const canAddCard = packageName.trim().length > 0;
+  const currentCard = cards.find((c) => c.localId === currentEditId);
+
+  const saveCurrentActiveCardData = () => {
+    if (!currentEditId) return;
+
+    const frontRef = getCanvasRefByKey(`${currentEditId}-front`);
+    const backRef = getCanvasRefByKey(`${currentEditId}-back`);
+
+    if (!frontRef && !backRef) return;
+
+    const frontImg = frontRef?.toDataURL?.();
+    const backImg = backRef?.toDataURL?.();
+    const frontDataStr = frontRef?.getSceneData?.();
+    const backDataStr = backRef?.getSceneData?.();
+
+    setCards((prev) =>
+      prev.map((card) => {
+        if (card.localId === currentEditId) {
+          return {
+            ...card,
+            frontData: frontDataStr || card.frontData,
+            front: frontImg || card.front,
+            backData: backDataStr || card.backData,
+            back: backImg || card.back,
+          };
+        }
+        return card;
+      })
+    );
+  };
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    
+    const preventNativeScroll = (e) => {
+      const target = e.target;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+      
+      if (thumbnailListRef.current && thumbnailListRef.current.contains(target)) {
+        return; 
+      }
+      e.preventDefault();
+    };
+    
+    document.addEventListener('touchmove', preventNativeScroll, { passive: false });
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+      document.removeEventListener('touchmove', preventNativeScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    const list = thumbnailListRef.current;
+    if (!list) return;
+
+    const handleWheel = (e) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        list.scrollLeft += e.deltaY;
+      }
+    };
+
+    list.addEventListener('wheel', handleWheel, { passive: false });
+    return () => list.removeEventListener('wheel', handleWheel);
+  }, [cards.length]); 
 
   useEffect(() => {
     loadCards();
@@ -84,11 +148,9 @@ export default function CardsList({
 
   const loadCards = async () => {
     if (!user || !packageItem?.id) return;
-
     try {
       setLoading(true);
       setError('');
-
       const userCards = await getFlashcards(user.uid, packageItem.id);
 
       const normalized = userCards.map((item) =>
@@ -103,12 +165,23 @@ export default function CardsList({
       );
 
       setCards(normalized);
+      if (normalized.length > 0) {
+        setCurrentEditId(normalized[0].localId);
+        setActiveCanvasKey(`${normalized[0].localId}-front`);
+      }
     } catch (err) {
       console.error('Lỗi load cards:', err);
       setError('Lỗi tải danh sách thẻ');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSwitchCard = (targetId) => {
+    if (currentEditId === targetId) return;
+    saveCurrentActiveCardData();
+    setCurrentEditId(targetId);
+    setActiveCanvasKey(`${targetId}-front`);
   };
 
   const handleAddCardPair = () => {
@@ -119,11 +192,21 @@ export default function CardsList({
       return;
     }
 
-    const newCard = createLocalCard();
+    saveCurrentActiveCardData();
 
-    queueScrollToCard(newCard.localId);
+    const newCard = createLocalCard();
     setCards((prev) => [...prev, newCard]);
+    setCurrentEditId(newCard.localId);
     setActiveCanvasKey(`${newCard.localId}-front`);
+
+    setTimeout(() => {
+      if (thumbnailListRef.current) {
+        thumbnailListRef.current.scrollTo({
+          left: thumbnailListRef.current.scrollWidth,
+          behavior: 'smooth',
+        });
+      }
+    }, 100);
   };
 
   const handleDeleteCardPair = (localId) => {
@@ -134,7 +217,8 @@ export default function CardsList({
     const localId = deleteTargetId;
     if (!localId) return;
 
-    const target = cards.find((item) => item.localId === localId);
+    const targetIndex = cards.findIndex((item) => item.localId === localId);
+    const target = cards[targetIndex];
 
     if (!target) {
       setDeleteTargetId(null);
@@ -143,13 +227,23 @@ export default function CardsList({
 
     try {
       setIsDeletingCard(true);
-
       if (target.id) {
         await deleteFlashcard(user.uid, packageItem.id, target.id);
       }
-
       removeCardBindings(localId);
-      setCards((prev) => prev.filter((item) => item.localId !== localId));
+      
+      const nextCards = cards.filter((item) => item.localId !== localId);
+      setCards(nextCards);
+      
+      if (currentEditId === localId) {
+        if (nextCards.length > 0) {
+          const nextIndex = Math.min(targetIndex, nextCards.length - 1);
+          setCurrentEditId(nextCards[nextIndex].localId);
+          setActiveCanvasKey(`${nextCards[nextIndex].localId}-front`);
+        } else {
+          setCurrentEditId(null);
+        }
+      }
       setDeleteTargetId(null);
     } catch (err) {
       console.error(err);
@@ -164,15 +258,12 @@ export default function CardsList({
       setError('Hãy chạm vào một mặt thẻ trước khi import ảnh');
       return;
     }
-
-    const input = document.getElementById('cards-import-input');
-    input?.click();
+    document.getElementById('cards-import-input')?.click();
   };
 
   const handleImportChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
       await activeCanvasRef?.importImageFile?.(file);
     } finally {
@@ -182,256 +273,154 @@ export default function CardsList({
 
   const handleSaveAll = async () => {
     if (!user || !packageItem?.id) return;
-
     setError('');
     setSaveMessage('');
-
-    if (!ensurePackageName('Bạn phải nhập tên gói trước khi lưu thẻ')) {
-      return;
-    }
+    if (!ensurePackageName('Bạn phải nhập tên gói trước khi lưu thẻ')) return;
 
     try {
       setSavingAll(true);
+      saveCurrentActiveCardData();
 
-      await updatePackage(
-        user.uid,
-        packageItem.id,
-        packageName,
-        packageDescription
-      );
+      await updatePackage(user.uid, packageItem.id, packageName, packageDescription);
+      syncSavedPackageSnapshot({ name: packageName, description: packageDescription });
+      onPackageUpdated?.({ ...packageItem, name: packageName, description: packageDescription });
 
-      syncSavedPackageSnapshot({
-        name: packageName,
-        description: packageDescription,
-      });
+      setTimeout(async () => {
+        const nextCards = [];
+        const frontRef = getCanvasRefByKey(`${currentEditId}-front`);
+        const backRef = getCanvasRefByKey(`${currentEditId}-back`);
 
-      onPackageUpdated?.({
-        ...packageItem,
-        name: packageName,
-        description: packageDescription,
-      });
+        for (const item of cards) {
+          const isCurrent = item.localId === currentEditId;
+          const frontDataStr = isCurrent ? (frontRef?.getSceneData?.() || item.frontData) : item.frontData;
+          const frontImgUrl = isCurrent ? (frontRef?.toDataURL?.() || item.front) : item.front;
+          const backDataStr = isCurrent ? (backRef?.getSceneData?.() || item.backData) : item.backData;
+          const backImgUrl = isCurrent ? (backRef?.toDataURL?.() || item.back) : item.back;
 
-      const nextCards = [];
-
-      for (const item of cards) {
-        const frontRef = getCanvasRefByKey(`${item.localId}-front`);
-        const backRef = getCanvasRefByKey(`${item.localId}-back`);
-
-        const front = frontRef?.toDataURL?.() || item.front || '';
-        const back = backRef?.toDataURL?.() || item.back || '';
-
-        const frontData = frontRef?.getSceneData?.() || item.frontData || null;
-        const backData = backRef?.getSceneData?.() || item.backData || null;
-
-        if (item.id) {
-          await updateFlashcard(user.uid, packageItem.id, item.id, {
-            front,
-            back,
-            frontData,
-            backData,
-          });
-
-          nextCards.push({
-            ...item,
-            front,
-            back,
-            frontData,
-            backData,
-          });
-        } else {
-          const newId = await addFlashcard(user.uid, packageItem.id, {
-            front,
-            back,
-            frontData,
-            backData,
-          });
-
-          nextCards.push({
-            ...item,
-            id: newId,
-            front,
-            back,
-            frontData,
-            backData,
-          });
+          if (item.id) {
+            await updateFlashcard(user.uid, packageItem.id, item.id, {
+              front: frontImgUrl || '', back: backImgUrl || '', frontData: frontDataStr || null, backData: backDataStr || null,
+            });
+            nextCards.push({ ...item, front: frontImgUrl, back: backImgUrl, frontData: frontDataStr, backData: backDataStr });
+          } else {
+            const newId = await addFlashcard(user.uid, packageItem.id, {
+              front: frontImgUrl || '', back: backImgUrl || '', frontData: frontDataStr || null, backData: backDataStr || null,
+            });
+            nextCards.push({ ...item, id: newId, front: frontImgUrl, back: backImgUrl, frontData: frontDataStr, backData: backDataStr });
+          }
         }
-      }
+        setCards(nextCards);
+        setSaveMessage('Đã lưu toàn bộ thẻ');
+        setSavingAll(false);
+      }, 50);
 
-      setCards(nextCards);
-      setSaveMessage('Đã lưu toàn bộ thẻ');
     } catch (err) {
       console.error(err);
       setError('Lỗi lưu thẻ');
-    } finally {
       setSavingAll(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
-        <div className="rounded-[28px] border border-white/70 bg-white/85 px-8 py-8 text-center text-slate-500 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl">
-          Đang tải danh sách thẻ...
-        </div>
+      <div className="mx-auto flex min-h-screen w-full items-center justify-center">
+        <div className="rounded-[28px] bg-white/85 px-8 py-8 text-center shadow-lg backdrop-blur-xl">Đang tải...</div>
       </div>
     );
   }
 
   return (
     <>
-      <input
-        id="cards-import-input"
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleImportChange}
-      />
+      <input id="cards-import-input" type="file" accept="image/*" className="hidden" onChange={handleImportChange} />
 
-      <div
-        className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]"
-        style={{ overscrollBehavior: 'none' }}
-      >
+      <div className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]">
+        
         <div className="z-40 w-full shrink-0 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl">
           <div className="mx-auto w-full max-w-[1500px]">
-            <CardsEditorHeader
-              onBack={onBack}
-              isEditingName={isEditingName}
-              headerNameInputRef={headerNameInputRef}
-              draftPackageName={draftPackageName}
-              setDraftPackageName={setDraftPackageName}
-              handleHeaderNameKeyDown={handleHeaderNameKeyDown}
-              saveHeaderName={saveHeaderName}
-              cancelHeaderNameEdit={cancelHeaderNameEdit}
-              openNameEditor={openNameEditor}
-              packageName={packageName}
-              isAutoSaving={isAutoSaving}
-              handleSaveAll={handleSaveAll}
-              savingAll={savingAll}
-              nameError={nameError}
-              cardsCount={cards.length}
-              activeCanvasKey={activeCanvasKey}
-              error={error}
-              saveMessage={saveMessage}
-            />
-
+            <CardsEditorHeader {...{ onBack, isEditingName, headerNameInputRef, draftPackageName, setDraftPackageName, handleHeaderNameKeyDown, saveHeaderName, cancelHeaderNameEdit, openNameEditor, packageName, isAutoSaving, handleSaveAll, savingAll, nameError, cardsCount: cards.length, activeCanvasKey, error, saveMessage }} />
             <div className="px-3 pb-3 sm:px-5 lg:px-8">
-              <CardsEditorToolbar
-                activeCanvasRef={activeCanvasRef}
-                activeStatus={activeStatus}
-                toolbox={toolbox}
-                setToolbox={setToolbox}
-                handleImportClick={handleImportClick}
-                handleAddCardPair={handleAddCardPair}
-                canAddCard={canAddCard}
-              />
+              <CardsEditorToolbar {...{ activeCanvasRef, activeStatus, toolbox, setToolbox, handleImportClick, handleAddCardPair, canAddCard }} />
             </div>
           </div>
         </div>
 
-        <div className="relative w-full flex-1 overflow-hidden">
-          {cards.length === 0 ? (
-            <div className="flex h-full w-full items-center justify-center p-8">
-              <CardsEmptyState
-                handleAddCardPair={handleAddCardPair}
-                canAddCard={canAddCard}
-              />
-            </div>
-          ) : (
-            <TransformWrapper
-              initialScale={1}
-              minScale={0.45}
-              maxScale={4}
-              limitToBounds={false}
-              centerOnInit={false}
-              wheel={{
-                step: 0.08,
-                wheelDisabled: false,
-                touchPadDisabled: false,
-              }}
-              pinch={{
-                step: 5,
-                disabled: false,
-              }}
-              panning={{
-                disabled: false,
-                allowLeftClickPan: true,
-                allowMiddleClickPan: true,
-                allowRightClickPan: false,
-                velocityDisabled: false,
-              }}
-              doubleClick={{ disabled: true }}
+        {cards.length > 0 && (
+          <div className="z-30 w-full shrink-0 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-md">
+            <div 
+              ref={thumbnailListRef}
+              className="flex w-full items-center gap-4 overflow-x-auto px-6 py-3 hide-scrollbar"
+              style={{ touchAction: 'pan-x' }} 
             >
-              {({ zoomIn, zoomOut, resetTransform }) => (
-                <>
-                  <div className="absolute bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl border border-slate-200/50 bg-white/80 p-2 shadow-lg backdrop-blur-xl">
-                    <button
-                      type="button"
-                      onClick={() => zoomOut()}
-                      className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200"
-                    >
-                      <FiZoomOut size={22} />
-                    </button>
-
-                    <div className="h-6 w-px bg-slate-300" />
-
-                    <button
-                      type="button"
-                      onClick={() => resetTransform()}
-                      className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200"
-                    >
-                      <FiMaximize size={22} />
-                    </button>
-
-                    <div className="h-6 w-px bg-slate-300" />
-
-                    <button
-                      type="button"
-                      onClick={() => zoomIn()}
-                      className="rounded-xl p-3 text-slate-600 transition active:bg-slate-200"
-                    >
-                      <FiZoomIn size={22} />
-                    </button>
-                  </div>
-
-                  <TransformComponent
-                    wrapperClass="!h-full !w-full"
-                    contentClass="!min-h-full !w-full"
+              {cards.map((item, index) => {
+                const isActive = item.localId === currentEditId;
+                return (
+                  <button
+                    key={item.localId}
+                    type="button"
+                    onClick={() => handleSwitchCard(item.localId)}
+                    className={cn(
+                      "group relative flex shrink-0 cursor-pointer flex-col items-center gap-2 transition-all duration-300 ease-out",
+                      isActive ? "scale-110 opacity-100" : "scale-100 opacity-50 hover:scale-105 hover:opacity-100"
+                    )}
                   >
-                    <div
-                      className="flex w-full flex-col items-center justify-start gap-12 py-16"
-                      style={{
-                        backgroundImage:
-                          'radial-gradient(#cbd5e1 1.5px, transparent 1.5px)',
-                        backgroundSize: '32px 32px',
-                        backgroundPosition: '0 0',
-                        touchAction: 'none',
-                      }}
-                    >
-                      {cards.map((item, index) => (
-                        <div
-                          key={item.localId}
-                          className="w-[850px] max-w-[90%] shrink-0"
-                        >
-                          <FlashcardPairItem
-                            item={item}
-                            index={index}
-                            activeCanvasKey={activeCanvasKey}
-                            setActiveCanvasKey={setActiveCanvasKey}
-                            setPairCardRef={setPairCardRef}
-                            setCanvasRef={setCanvasRef}
-                            toolbox={toolbox}
-                            handleCanvasStatusChange={handleCanvasStatusChange}
-                            handleDeleteCardPair={handleDeleteCardPair}
-                          />
-                        </div>
-                      ))}
+                    <div className={cn(
+                      "flex h-16 w-[100px] overflow-hidden rounded-xl border-2 bg-white shadow-sm transition-colors duration-300",
+                      isActive ? "border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.4)]" : "border-slate-200"
+                    )}>
+                      <div className="relative h-full w-1/2 border-r border-slate-100 bg-sky-50/30">
+                        {item.front && <img src={item.front} alt="F" className="absolute inset-0 h-full w-full object-cover p-1" />}
+                      </div>
+                      <div className="relative h-full w-1/2 bg-pink-50/30">
+                        {item.back && <img src={item.back} alt="B" className="absolute inset-0 h-full w-full object-cover p-1" />}
+                      </div>
                     </div>
-                  </TransformComponent>
-                </>
-              )}
-            </TransformWrapper>
+                   
+                  </button>
+                );
+              })}
+              
+              <button
+                onClick={handleAddCardPair}
+                className="flex h-16 w-[100px] shrink-0 items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/50 text-slate-400 transition hover:border-sky-400 hover:bg-sky-50 hover:text-sky-500"
+              >
+                +
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* THAY ĐỔI: items-center thành items-start, thêm pt-4 lg:pt-6 để đẩy thẻ sát lên trên */}
+        <div 
+          className={cn(
+            "relative flex w-full flex-1 justify-center overflow-hidden px-4 lg:px-8",
+            cards.length === 0 ? "items-center py-4" : "items-start pt-4 lg:pt-6 pb-4"
+          )}
+          style={{ touchAction: 'none' }}
+        >
+          {cards.length === 0 ? (
+            <CardsEmptyState handleAddCardPair={handleAddCardPair} canAddCard={canAddCard} />
+          ) : (
+            currentCard && (
+              <div 
+                key={currentEditId}
+                className="w-[850px] max-w-full animate-in zoom-in-[0.85] slide-in-from-bottom-12 fade-in duration-500 ease-out fill-mode-forwards"
+              >
+                <FlashcardPairItem
+                  item={currentCard}
+                  index={cards.findIndex(c => c.localId === currentEditId)}
+                  activeCanvasKey={activeCanvasKey}
+                  setActiveCanvasKey={setActiveCanvasKey}
+                  setPairCardRef={setPairCardRef}
+                  setCanvasRef={setCanvasRef}
+                  toolbox={toolbox}
+                  handleCanvasStatusChange={handleCanvasStatusChange}
+                  handleDeleteCardPair={handleDeleteCardPair}
+                />
+              </div>
+            )
           )}
         </div>
+
       </div>
 
       <ConfirmModal
@@ -445,6 +434,11 @@ export default function CardsList({
         onConfirm={handleConfirmDeleteCard}
         onClose={() => setDeleteTargetId(null)}
       />
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}} />
     </>
   );
 }
