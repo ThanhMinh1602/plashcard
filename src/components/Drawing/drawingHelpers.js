@@ -6,62 +6,50 @@ export const CANVAS_SCALE =
 export const getDynamicStrokeOptions = (brushType, size) => {
   const safeSize = Math.max(Number(size) || 1, 1);
 
-  // 1. Cấu hình BÚT MỰC (Pen) - Cân chỉnh tối ưu cho viết tay
+  // CẤU HÌNH BÚT MỰC (Pen) - Nét tròn đều, siêu mượt, không thanh đậm
   const baseOptions = {
     size: safeSize,
-    thinning: 0.55,       // Tạo độ thanh đậm mềm mại, tự nhiên khi thay đổi tốc độ/lực
-    smoothing: 0.85,      // Khử rung tay cực tốt (tăng từ 0.78 lên), chữ sẽ tròn trịa hơn
-    streamline: 0.75,     // Độ trễ nhẹ kéo theo bút, tạo cảm giác uốn lượn mượt mà
-    simulatePressure: true, 
-    // Dùng đồ thị Sin để bo tròn nét uốn cong thay vì tuyến tính thô cứng
-    easing: (t) => Math.sin((t * Math.PI) / 2), 
+    thinning: 0,             // 0 = Kích thước nét luôn cố định, không bị ảnh hưởng bởi lực nhấn hay tốc độ
+    smoothing: 0.85,         // Đẩy lên rất cao để khử rung tay, nét uốn lượn cực mượt
+    streamline: 0.85,        // Đẩy lên cao để thuật toán nối các điểm trơn tru hơn
+    simulatePressure: false, // Tắt hoàn toàn áp lực
     start: {
-      taper: safeSize * 1.2, // Khi chạm bút xuống nét sẽ thanh nhỏ rồi đậm dần
-      cap: true,
-      easing: (t) => t * (2 - t), // Thuật toán Ease-out giúp mực ra nhanh nét
+      taper: 0,              // Tắt vót nhọn đầu bút
+      cap: true,             // Bo tròn đầu
     },
     end: {
-      taper: safeSize * 1.5, // Khi nhấc bút lên vuốt nhọn tự nhiên
-      cap: true,
-      easing: (t) => 1 - Math.pow(1 - t, 4), // Vuốt đuôi mượt, dài và thanh thoát
+      taper: 0,              // Tắt vót nhọn đuôi bút
+      cap: true,             // Bo tròn đuôi
     },
   };
 
   switch (brushType) {
     case 'pencil': 
-      // 2. BÚT CHÌ (Pencil)
       return {
         ...baseOptions,
         size: safeSize * 0.8,
-        thinning: 0.1,        // Chì có nét khá đều, gần như không thanh đậm
-        smoothing: 0.6,       // Ít mượt hơn một chút để giữ lại độ "sần" của chì
-        streamline: 0.5,
-        start: { taper: 0, cap: true },
-        end: { taper: 0, cap: true },
+        smoothing: 0.6,      // Bút chì giảm mượt đi một chút để giữ lại độ cứng cáp
+        streamline: 0.6,
       };
 
     case 'marker': 
-      // 3. BÚT LÔNG (Marker)
       return {
         ...baseOptions,
         size: safeSize * 1.8,
-        thinning: -0.2,       // Đè mạnh thì nét to ra (âm) thay vì mỏng đi
-        smoothing: 0.9,
-        streamline: 0.8,
-        start: { taper: 0, cap: true },
-        end: { taper: 0, cap: true },
+        smoothing: 0.9,      // Marker cần độ mượt tối đa
+        streamline: 0.9,
       };
 
     case 'calligraphy': 
-      // 4. BÚT THƯ PHÁP (Calligraphy)
       return {
         ...baseOptions,
         size: safeSize * 1.2,
-        thinning: 0.85,       // Ép nét thanh đậm cực gắt
-        smoothing: 0.95,      // Uốn lượn siêu mượt
-        streamline: 0.85,
-        start: { taper: safeSize * 3, cap: true },
-        end: { taper: safeSize * 3, cap: true },
+        // Riêng cọ thư pháp (Calligraphy) thì bắt buộc phải giữ lại thanh đậm
+        thinning: 0.85,      
+        smoothing: 0.8,
+        streamline: 0.8,
+        start: { taper: safeSize * 2, cap: true },
+        end: { taper: safeSize * 2, cap: true },
       };
 
     case 'pen':

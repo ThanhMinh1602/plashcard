@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react'; // <-- Thêm import Framer Motion
 import ConfirmModal from '../Common/ConfirmModal';
 import {
   getFlashcards,
@@ -374,7 +375,6 @@ export default function CardsList({
                         {item.back && <img src={item.back} alt="B" className="absolute inset-0 h-full w-full object-cover p-1" />}
                       </div>
                     </div>
-                   
                   </button>
                 );
               })}
@@ -389,7 +389,6 @@ export default function CardsList({
           </div>
         )}
 
-        {/* THAY ĐỔI: items-center thành items-start, thêm pt-4 lg:pt-6 để đẩy thẻ sát lên trên */}
         <div 
           className={cn(
             "relative flex w-full flex-1 justify-center overflow-hidden px-4 lg:px-8",
@@ -397,28 +396,52 @@ export default function CardsList({
           )}
           style={{ touchAction: 'none' }}
         >
-          {cards.length === 0 ? (
-            <CardsEmptyState handleAddCardPair={handleAddCardPair} canAddCard={canAddCard} />
-          ) : (
-            currentCard && (
-              <div 
-                key={currentEditId}
-                className="w-[850px] max-w-full animate-in zoom-in-[0.85] slide-in-from-bottom-12 fade-in duration-500 ease-out fill-mode-forwards"
+          {/* SỬ DỤNG ANIMATE PRESENCE ĐỂ QUẢN LÝ CHUYỂN CẢNH */}
+          <AnimatePresence mode="wait">
+            {cards.length === 0 ? (
+              <motion.div
+                key="empty-state"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
               >
-                <FlashcardPairItem
-                  item={currentCard}
-                  index={cards.findIndex(c => c.localId === currentEditId)}
-                  activeCanvasKey={activeCanvasKey}
-                  setActiveCanvasKey={setActiveCanvasKey}
-                  setPairCardRef={setPairCardRef}
-                  setCanvasRef={setCanvasRef}
-                  toolbox={toolbox}
-                  handleCanvasStatusChange={handleCanvasStatusChange}
-                  handleDeleteCardPair={handleDeleteCardPair}
-                />
-              </div>
-            )
-          )}
+                <CardsEmptyState handleAddCardPair={handleAddCardPair} canAddCard={canAddCard} />
+              </motion.div>
+            ) : (
+              currentCard && (
+                <motion.div 
+                  key={currentEditId}
+                  className="w-[850px] max-w-full origin-top"
+                  // Các trạng thái hoạt hình:
+                  // 1. Bắt đầu (từ thumbnail bay ra): Thu nhỏ (0.1), dịch lên trên (-120px)
+                  // 2. Animate (ở giữa màn hình): Kích thước chuẩn 1, vị trí chuẩn 0
+                  // 3. Thoát (bay về lại thumbnail): Thu nhỏ dần về phía trên
+                  initial={{ opacity: 0, scale: 0.1, y: -120 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.1, y: -120 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 350, 
+                    damping: 30,
+                    mass: 0.8
+                  }}
+                >
+                  <FlashcardPairItem
+                    item={currentCard}
+                    index={cards.findIndex(c => c.localId === currentEditId)}
+                    activeCanvasKey={activeCanvasKey}
+                    setActiveCanvasKey={setActiveCanvasKey}
+                    setPairCardRef={setPairCardRef}
+                    setCanvasRef={setCanvasRef}
+                    toolbox={toolbox}
+                    handleCanvasStatusChange={handleCanvasStatusChange}
+                    handleDeleteCardPair={handleDeleteCardPair}
+                  />
+                </motion.div>
+              )
+            )}
+          </AnimatePresence>
         </div>
 
       </div>

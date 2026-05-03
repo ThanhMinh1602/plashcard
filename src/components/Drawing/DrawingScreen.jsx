@@ -170,7 +170,13 @@ const DrawingScreen = forwardRef(
       const canvas = historyCanvasRef.current;
       const context = historyContextRef.current;
       if (!canvas || !context) return;
+      
+      // Xóa sạch cache lịch sử (bỏ qua scale an toàn tuyệt đối)
+      context.save();
+      context.setTransform(1, 0, 0, 1, 0, 0);
       context.clearRect(0, 0, canvas.width, canvas.height);
+      context.restore();
+
       historyRef.current.forEach((action) => drawAction(context, action));
     }, [drawAction]);
 
@@ -192,10 +198,18 @@ const DrawingScreen = forwardRef(
       mainContext.globalAlpha = 1;
 
       if (currentStrokeRef.current) {
+        // Clear lớp nháp an toàn
+        activeContext.save();
+        activeContext.setTransform(1, 0, 0, 1, 0, 0);
         activeContext.clearRect(0, 0, activeCanvas.width, activeCanvas.height);
+        activeContext.restore();
+
         activeContext.globalCompositeOperation = 'source-over';
         activeContext.globalAlpha = 1;
-        activeContext.drawImage(historyCanvas, 0, 0);
+        
+        // [FIX LỖI NẰM Ở ĐÂY]: Bắt buộc truyền width và height để iPad không tự scale 2 lần
+        activeContext.drawImage(historyCanvas, 0, 0, width, height); 
+        
         drawAction(activeContext, currentStrokeRef.current);
         mainContext.drawImage(activeCanvas, 0, 0, width, height);
       } else {
@@ -315,7 +329,6 @@ const DrawingScreen = forwardRef(
       };
     }, [initialData, initialImage, setupCanvasSize, renderHistoryToCache, redrawCanvas, updateStatus]);
 
-    // CHẶN BUG RESIZE OBSERVER (Nguyên nhân làm hư nét bút)
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas || typeof ResizeObserver === 'undefined') return undefined;
@@ -333,7 +346,6 @@ const DrawingScreen = forwardRef(
         const currentW = canvas.offsetWidth;
         const currentH = canvas.offsetHeight;
         
-        // Nếu chênh lệch quá nhỏ (sub-pixel do transition) thì hủy lệnh vẽ lại
         if (currentW === prevW && currentH === prevH) return;
         
         prevW = currentW;
@@ -362,13 +374,15 @@ const DrawingScreen = forwardRef(
     }, []);
 
     const handlePointerDown = useCallback((event) => {
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+
         if (!shouldDrawWithPointer(event)) return;
         if (!event.isPrimary) return;
+        
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        event.preventDefault();
-        event.stopPropagation();
         canvas.setPointerCapture?.(event.pointerId);
 
         const point = createPointFromEvent(event);
@@ -384,12 +398,12 @@ const DrawingScreen = forwardRef(
     );
 
     const handlePointerMove = useCallback((event) => {
+        if (event.cancelable) event.preventDefault();
+        event.stopPropagation();
+
         if (!isDrawingRef.current || !currentStrokeRef.current) return;
         if (!shouldDrawWithPointer(event)) return;
         if (!event.isPrimary) return;
-
-        event.preventDefault();
-        event.stopPropagation();
 
         const events = event.getCoalescedEvents?.() || [event];
         events.forEach((coalescedEvent) => {
@@ -403,11 +417,11 @@ const DrawingScreen = forwardRef(
     );
 
     const finishCurrentStroke = useCallback((event) => {
+        if (event && event.cancelable) event.preventDefault();
+        if (event) event.stopPropagation();
+
         if (!isDrawingRef.current) return;
-        if (event && shouldDrawWithPointer(event)) {
-          event.preventDefault?.();
-          event.stopPropagation?.();
-        }
+        
         canvasRef.current?.releasePointerCapture?.(event?.pointerId);
         isDrawingRef.current = false;
 
@@ -427,38 +441,37 @@ const DrawingScreen = forwardRef(
         renderHistoryToCache();
         redrawCanvas();
       },
-      [renderHistoryToCache, redrawCanvas, updateStatus, shouldDrawWithPointer]
+      [renderHistoryToCache, redrawCanvas, updateStatus]
     );
 
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return undefined;
+      
       const preventTouch = (event) => {
-        event.preventDefault();
+        if (event.cancelable) event.preventDefault();
       };
-      canvas.addEventListener('pointerdown', handlePointerDown, true);
-      canvas.addEventListener('pointermove', handlePointerMove, { passive: false, capture: true });
-      canvas.addEventListener('pointerup', finishCurrentStroke, true);
-      canvas.addEventListener('pointercancel', finishCurrentStroke, true);
-      canvas.addEventListener('pointerleave', finishCurrentStroke, true);
 
-      if (inputMode !== 'stylusOnly') {
-        canvas.addEventListener('touchstart', preventTouch, { passive: false });
-        canvas.addEventListener('touchmove', preventTouch, { passive: false });
-      }
+      canvas.addEventListener('pointerdown', handlePointerDown, { passive: false, capture: true });
+      canvas.addEventListener('pointermove', handlePointerMove, { passive: false, capture: true });
+      canvas.addEventListener('pointerup', finishCurrentStroke, { passive: false, capture: true });
+      canvas.addEventListener('pointercancel', finishCurrentStroke, { passive: false, capture: true });
+      canvas.addEventListener('pointerleave', finishCurrentStroke, { passive: false, capture: true });
+
+      canvas.addEventListener('touchstart', preventTouch, { passive: false, capture: true });
+      canvas.addEventListener('touchmove', preventTouch, { passive: false, capture: true });
 
       return () => {
-        canvas.removeEventListener('pointerdown', handlePointerDown, true);
-        canvas.removeEventListener('pointermove', handlePointerMove, true);
-        canvas.removeEventListener('pointerup', finishCurrentStroke, true);
-        canvas.removeEventListener('pointercancel', finishCurrentStroke, true);
-        canvas.removeEventListener('pointerleave', finishCurrentStroke, true);
-        if (inputMode !== 'stylusOnly') {
-          canvas.removeEventListener('touchstart', preventTouch);
-          canvas.removeEventListener('touchmove', preventTouch);
-        }
+        canvas.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+        canvas.removeEventListener('pointermove', handlePointerMove, { capture: true });
+        canvas.removeEventListener('pointerup', finishCurrentStroke, { capture: true });
+        canvas.removeEventListener('pointercancel', finishCurrentStroke, { capture: true });
+        canvas.removeEventListener('pointerleave', finishCurrentStroke, { capture: true });
+        
+        canvas.removeEventListener('touchstart', preventTouch, { capture: true });
+        canvas.removeEventListener('touchmove', preventTouch, { capture: true });
       };
-    }, [handlePointerDown, handlePointerMove, finishCurrentStroke, inputMode]);
+    }, [handlePointerDown, handlePointerMove, finishCurrentStroke]);
 
     useImperativeHandle(ref, () => ({
         undo: () => {
@@ -500,18 +513,16 @@ const DrawingScreen = forwardRef(
       [renderHistoryToCache, redrawCanvas, updateStatus]
     );
 
-    // CHẶN DOUBLE-TAP ZOOM (Thủ phạm chính)
     return (
       <canvas
         ref={canvasRef}
         className="block h-full w-full"
         style={{
-          // Đổi thành 'manipulation' để vẫn cho cuộn nhưng cấm iPad zoom khi chạm tay đúp vào
-          touchAction: inputMode === 'stylusOnly' ? 'manipulation' : 'none', 
+          touchAction: 'none',
           userSelect: 'none',
           WebkitUserSelect: 'none',
           WebkitTouchCallout: 'none',
-        }}
+        }} 
       />
     );
   }
