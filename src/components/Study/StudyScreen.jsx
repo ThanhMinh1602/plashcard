@@ -6,34 +6,46 @@ import {
   FiRefreshCw,
   FiRotateCw,
 } from 'react-icons/fi';
+import { Player } from '@lottiefiles/react-lottie-player';
+
+import monkey1 from '../../assets/lottie/monkey1.json';
+import monkey2 from '../../assets/lottie/monkey2.json';
+import monkey3 from '../../assets/lottie/monkey3.json';
 
 const SWIPE_THRESHOLD = 80;
 const SWIPE_VELOCITY = 500;
+const MONKEY_LIST = [monkey1, monkey2, monkey3];
 
 function StudyCardFace({ src, side }) {
+  const isFront = side === 'front';
+
   return (
     <div
-      className={`absolute inset-0 flex items-center justify-center overflow-hidden rounded-[32px] border-4 backface-hidden transition-all ${
-        side === 'front'
-          ? 'border-white bg-[#f8fafc] shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18),inset_0_4px_6px_rgba(255,255,255,0.8),inset_0_-4px_12px_rgba(0,0,0,0.03)]'
-          : 'border-white bg-[#fdf2f8] shadow-[0_24px_48px_-12px_rgba(15,23,42,0.18),inset_0_4px_6px_rgba(255,255,255,0.8),inset_0_-4px_12px_rgba(0,0,0,0.03)] [transform:rotateY(180deg)]'
+      className={`absolute inset-0 overflow-hidden rounded-[32px] p-[6px] backface-hidden transition-all shadow-[0_24px_60px_rgba(15,23,42,0.18)] ${
+        isFront
+          ? 'bg-gradient-to-br from-sky-300 via-white to-blue-400'
+          : 'bg-gradient-to-br from-pink-300 via-white to-fuchsia-400 [transform:rotateY(180deg)]'
       }`}
     >
-      {src ? (
-        <img
-          src={src}
-          alt={side === 'front' ? 'Mặt trước flashcard' : 'Mặt sau flashcard'}
-          className="h-full w-full select-none object-contain p-2"
-          draggable={false}
-        />
-      ) : (
-        <div className="flex h-full w-full flex-col items-center justify-center gap-3">
-          <div className="h-16 w-16 rounded-full bg-slate-100/50 shadow-inner" />
-          <div className="text-sm font-bold text-slate-300">
-            {side === 'front' ? 'Mặt trước trống' : 'Mặt sau trống'}
+      <div className="relative h-full w-full overflow-hidden rounded-[26px] bg-white">
+        {src ? (
+          <img
+            src={src}
+            alt={isFront ? 'Mặt trước flashcard' : 'Mặt sau flashcard'}
+            className="block h-full w-full select-none object-fill"
+            draggable={false}
+          />
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3">
+            <div className="h-16 w-16 rounded-full bg-slate-100/50 shadow-inner" />
+            <div className="text-sm font-bold text-slate-300">
+              {isFront ? 'Mặt trước trống' : 'Mặt sau trống'}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        <div className="pointer-events-none absolute inset-0 rounded-[26px] ring-1 ring-white/70" />
+      </div>
     </div>
   );
 }
@@ -154,18 +166,32 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
     ? normalizedCards.length
     : Math.min(currentIndex + 1, normalizedCards.length);
 
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscrollBehavior;
+    };
+  }, []);
+
   if (!normalizedCards.length) {
     return (
       <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(186,230,253,0.35),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.28),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] px-4 py-6 sm:px-6 md:min-h-screen">
         <div className="mx-auto w-full max-w-6xl">
           <div className="mb-6 grid gap-4 rounded-[24px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl md:grid-cols-[auto_1fr] md:items-center md:rounded-[28px]">
             <button
-              className="soft-button h-11 rounded-2xl border border-white/70 bg-white/90 px-4 text-slate-700"
+              className="soft-button h-11 w-11 rounded-2xl border border-white/70 bg-white/90 p-0 text-slate-700"
               onClick={onBack}
               type="button"
+              title="Quay lại"
+              aria-label="Quay lại"
             >
               <FiArrowLeft size={18} />
-              <span>Quay lại</span>
             </button>
 
             <div>
@@ -206,28 +232,40 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
 
   return (
     <div
-      className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(186,230,253,0.35),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.28),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] px-3 py-4 sm:px-6 sm:py-6 md:min-h-screen"
+      className="h-[100dvh] overflow-hidden bg-[radial-gradient(circle_at_top,rgba(186,230,253,0.35),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.28),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)] px-3 py-4 sm:px-6 sm:py-6 md:h-screen"
       style={{ overscrollBehavior: 'none' }}
     >
       <div className="mx-auto w-full max-w-6xl">
         <div className="mb-4 grid gap-4 rounded-[24px] border border-white/70 bg-white/80 p-4 shadow-[0_18px_44px_rgba(148,163,184,0.14)] backdrop-blur-xl sm:mb-6 md:grid-cols-[auto_1fr_auto] md:items-center md:rounded-[28px]">
           <button
-            className="soft-button h-11 rounded-2xl border border-white/70 bg-white/90 px-4 text-slate-700"
+            className="soft-button h-11 w-11 rounded-2xl border border-white/70 bg-white/90 p-0 text-slate-700"
             onClick={onBack}
             type="button"
+            title="Quay lại"
+            aria-label="Quay lại"
           >
             <FiArrowLeft size={18} />
-            <span>Quay lại</span>
           </button>
 
-          <div className="min-w-0">
-            <h2 className="truncate text-xl font-black tracking-tight text-slate-800 sm:text-2xl">
-              {packageItem?.name || 'Học thẻ'}
-            </h2>
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="min-w-0">
+              <h2 className="truncate text-xl font-black tracking-tight text-slate-800 sm:text-2xl">
+                {packageItem?.name || 'Học thẻ'}
+              </h2>
+            </div>
 
-            <p className="mt-1 text-sm text-slate-500">
-              Chạm để lật · Lướt trái để đi tới · Lướt phải để trở về
-            </p>
+            <div className="flex shrink-0 items-center gap-1">
+              {MONKEY_LIST.map((anim, i) => (
+                <div key={i} className="h-9 w-9">
+                  <Player
+                    autoplay
+                    loop
+                    src={anim}
+                    className="h-full w-full"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="w-full md:w-[220px]">
@@ -336,7 +374,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.16}
-                style={{ x, rotate: tilt, touchAction: 'pan-y' }}
+                style={{ x, rotate: tilt, touchAction: 'none' }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 onClick={handleCardClick}

@@ -1,39 +1,62 @@
 import React from 'react';
-import { FiPlus } from 'react-icons/fi';
+import { FiPlus, FiEdit3 } from 'react-icons/fi';
+import { Player } from '@lottiefiles/react-lottie-player';
 import { cn } from './constants';
 import usePenPress from './hooks/usePenPress';
+
+import emptyLottie from '../../assets/lottie/sundance.json';
 
 export default function CardsEmptyState({ handleAddCardPair, canAddCard }) {
   const bindPress = usePenPress();
 
   return (
-    <div className="rounded-[30px] border border-white/70 bg-white/80 px-6 py-16 text-center shadow-[0_20px_54px_rgba(148,163,184,0.16)] backdrop-blur-xl">
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-r from-sky-100 to-pink-100 text-slate-600">
-        <FiPlus size={24} />
+    <div className="relative mx-auto w-full max-w-xl overflow-hidden rounded-[34px] border border-white/70 bg-white/80 px-6 py-10 text-center shadow-[0_28px_80px_rgba(15,23,42,0.14)] backdrop-blur-2xl sm:px-8 sm:py-12">
+      <div className="pointer-events-none absolute -left-20 -top-20 h-44 w-44 rounded-full bg-sky-200/40 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-20 h-52 w-52 rounded-full bg-pink-200/45 blur-3xl" />
+
+      <div className="relative mx-auto mb-5 flex h-36 w-36 items-center justify-center rounded-[32px] border border-sky-100/70 bg-sky-50/70 shadow-inner">
+        <Player
+          autoplay
+          loop
+          src={emptyLottie}
+          className="h-32 w-32"
+        />
       </div>
 
-      <h3 className="text-2xl font-black tracking-tight text-slate-800">
-        Chưa có flashcard nào
+      <div className="relative mb-3 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/75 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-sky-600 shadow-sm">
+        {canAddCard ? <FiPlus size={13} /> : <FiEdit3 size={13} />}
+        <span>{canAddCard ? 'Sẵn sàng tạo thẻ' : 'Cần đặt tên gói'}</span>
+      </div>
+
+      <h3 className="relative text-2xl font-black tracking-tight text-slate-800 sm:text-3xl">
+        {canAddCard ? 'Chưa có flashcard nào' : 'Đặt tên gói trước nhé'}
       </h3>
 
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
-        Hãy tạo cặp thẻ đầu tiên. Bạn có thể vẽ trực tiếp, import ảnh vào từng
-        mặt thẻ và lưu toàn bộ như app hiện tại.
+      <p className="relative mx-auto mt-3 max-w-md text-sm leading-6 text-slate-500">
+        {canAddCard
+          ? 'Hãy tạo cặp thẻ đầu tiên. Bạn có thể vẽ trực tiếp, import ảnh vào từng mặt thẻ và lưu toàn bộ như app hiện tại.'
+          : 'Bạn cần nhập tên gói flashcard trước khi thêm thẻ mới. Sau khi đặt tên, nút thêm thẻ sẽ tự động được mở.'}
       </p>
+
+      {!canAddCard && (
+        <div className="relative mx-auto mt-5 max-w-md rounded-3xl border border-amber-100 bg-amber-50/80 px-4 py-3 text-sm font-semibold leading-6 text-amber-700 shadow-sm">
+          Hãy bấm vào tên gói ở phía trên để đặt tên trước.
+        </div>
+      )}
 
       <button
         type="button"
         disabled={!canAddCard}
         {...bindPress(handleAddCardPair, !canAddCard)}
         className={cn(
-          'mt-6 inline-flex h-12 items-center gap-2 rounded-2xl px-5 text-sm font-bold transition',
+          'relative mt-7 inline-flex h-12 items-center gap-2 rounded-2xl px-5 text-sm font-black transition',
           canAddCard
-            ? 'bg-gradient-to-r from-sky-300 via-blue-400 to-pink-300 text-slate-900 shadow-[0_16px_36px_rgba(96,165,250,0.28)] hover:-translate-y-0.5'
-            : 'cursor-not-allowed bg-slate-100 text-slate-400'
+            ? 'bg-gradient-to-r from-sky-400 via-blue-500 to-pink-400 bg-[length:200%_200%] text-white shadow-[0_18px_42px_rgba(59,130,246,0.28)] hover:-translate-y-0.5 hover:shadow-[0_24px_54px_rgba(236,72,153,0.28)]'
+            : 'cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400 shadow-sm'
         )}
       >
         <FiPlus size={16} />
-        <span>Thêm cặp thẻ đầu tiên</span>
+        <span>{canAddCard ? 'Thêm cặp thẻ đầu tiên' : 'Chưa thể thêm thẻ'}</span>
       </button>
     </div>
   );

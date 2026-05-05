@@ -1,5 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { FiMaximize2 } from 'react-icons/fi';
+import { Player } from '@lottiefiles/react-lottie-player';
+import savingLottie from '../../assets/lottie/sundance.json';
+import monkey1 from '../../assets/lottie/monkey1.json';
+import monkey2 from '../../assets/lottie/monkey2.json';
+import monkey3 from '../../assets/lottie/monkey3.json';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from '../Common/ConfirmModal';
 import {
@@ -7,6 +12,7 @@ import {
   addFlashcard,
   updateFlashcard,
   deleteFlashcard,
+  deletePackage,
   updatePackage,
 } from '../../services/flashcardService';
 
@@ -26,7 +32,7 @@ export default function CardsList({
   onPackageUpdated,
 }) {
   const bindPress = usePenPress();
-
+  const BACK_CONFIRM_MONKEY_LIST = [monkey1, monkey2, monkey3];
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingAll, setSavingAll] = useState(false);
@@ -35,6 +41,9 @@ export default function CardsList({
   const [saveMessage, setSaveMessage] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isDeletingCard, setIsDeletingCard] = useState(false);
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
+  const [backConfirmMonkeyIndex, setBackConfirmMonkeyIndex] = useState(0);
+  const backConfirmMonkeyIndexRef = useRef(-1);
   const [toolbox, setToolbox] = useState(DEFAULT_TOOLBOX);
 
   const [currentEditId, setCurrentEditId] = useState(null);
@@ -42,6 +51,7 @@ export default function CardsList({
 
   const cardGestureAreaRef = useRef(null);
   const touchPointersRef = useRef(new Map());
+
 
   const [cardTransform, setCardTransform] = useState({
     zoom: 1,
@@ -466,16 +476,14 @@ export default function CardsList({
     }
   };
 
-  const handleSaveAll = () => {
-    saveAllCards({ showMessage: true });
-  };
   const waitForNextPaint = () =>
     new Promise((resolve) => {
       requestAnimationFrame(() => {
         requestAnimationFrame(resolve);
       });
     });
-  const handleBackAndSave = async () => {
+
+  const handleSaveAll = async () => {
     if (savingAll || isBackSaving) return;
 
     setIsBackSaving(true);
@@ -483,14 +491,41 @@ export default function CardsList({
     // Cho React kịp render modal trước khi chạy toDataURL / lưu Firestore
     await waitForNextPaint();
 
-    const saved = await saveAllCards({ showMessage: false });
+    await saveAllCards({ showMessage: true });
 
-    if (saved) {
-      onBack?.();
+    setIsBackSaving(false);
+  };
+
+  const handleBackClick = async () => {
+    if (savingAll || isBackSaving) return;
+
+    if (cards.length === 0) {
+      try {
+        if (user?.uid && packageItem?.id) {
+          await deletePackage(user.uid, packageItem.id);
+        }
+
+        onBack?.();
+      } catch (err) {
+        console.error(err);
+        setError('Lỗi thoát gói rỗng');
+      }
+
       return;
     }
 
-    setIsBackSaving(false);
+    const nextMonkeyIndex =
+      (backConfirmMonkeyIndexRef.current + 1) %
+      BACK_CONFIRM_MONKEY_LIST.length;
+
+    backConfirmMonkeyIndexRef.current = nextMonkeyIndex;
+    setBackConfirmMonkeyIndex(nextMonkeyIndex);
+    setShowBackConfirm(true);
+  };
+
+  const handleConfirmBackWithoutSave = () => {
+    setShowBackConfirm(false);
+    onBack?.();
   };
   const MIN_CARD_ZOOM = 0.65;
   const MAX_CARD_ZOOM = 2.5;
@@ -680,7 +715,7 @@ export default function CardsList({
         >
           <div className="mx-auto w-full max-w-[1500px]">
             <CardsEditorHeader
-              onBack={handleBackAndSave}
+              onBack={handleBackClick}
               isEditingName={isEditingName}
               headerNameInputRef={headerNameInputRef}
               draftPackageName={draftPackageName}
@@ -877,7 +912,14 @@ export default function CardsList({
       {isBackSaving && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm">
           <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]">
-            <div className="mb-4 h-11 w-11 animate-spin rounded-full border-4 border-slate-200 border-t-sky-500" />
+            <div className="mb-4 h-32 w-32">
+              <Player
+                autoplay
+                loop
+                src={savingLottie}
+                className="h-full w-full"
+              />
+            </div>
 
             <h3 className="text-lg font-black text-slate-800">
               Đang lưu thẻ...
@@ -889,6 +931,20 @@ export default function CardsList({
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={showBackConfirm}
+        title="Thoát mà không lưu?"
+        message="Mất hết ráng chịu nha! :))"
+        confirmText="Thoát không lưu"
+        cancelText="Ở lại"
+        variant="warning"
+        loading={false}
+        lottieSrc={BACK_CONFIRM_MONKEY_LIST[backConfirmMonkeyIndex]}
+        lottieClassName="h-28 w-28"
+        onConfirm={handleConfirmBackWithoutSave}
+        onClose={() => setShowBackConfirm(false)}
+      />
+
       <ConfirmModal
         open={Boolean(deleteTargetId)}
         title="Xóa cặp thẻ này?"

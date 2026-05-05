@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Player } from '@lottiefiles/react-lottie-player';
 import { createPortal } from 'react-dom';
 import { FiAlertTriangle, FiLogOut, FiTrash2, FiX } from 'react-icons/fi';
 
@@ -31,6 +32,8 @@ export default function ConfirmModal({
   cancelText = 'Hủy',
   variant = 'danger',
   loading = false,
+  lottieSrc = null,
+  lottieClassName = 'h-24 w-24',
   onConfirm,
   onClose,
 }) {
@@ -80,11 +83,22 @@ export default function ConfirmModal({
           <FiX size={18} />
         </button>
 
-        <div className="mb-4 flex justify-center">
-          <div className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${tone.iconWrap}`}>
-            <Icon size={24} />
-          </div>
-        </div>
+       <div className="mb-4 flex justify-center">
+  {lottieSrc ? (
+    <div className={lottieClassName}>
+      <Player
+        autoplay
+        loop
+        src={lottieSrc}
+        className="h-full w-full"
+      />
+    </div>
+  ) : (
+    <div className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${tone.iconWrap}`}>
+      <Icon size={24} />
+    </div>
+  )}
+</div>
 
         <div className="text-center">
           <h3 id="confirm-modal-title" className="text-xl font-black tracking-tight text-slate-800">

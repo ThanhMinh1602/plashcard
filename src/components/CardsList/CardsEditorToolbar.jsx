@@ -5,8 +5,15 @@ import {
   FiCornerUpRight,
   FiPlus,
 } from 'react-icons/fi';
+import { Player } from '@lottiefiles/react-lottie-player';
 import { BRUSH_TYPES, TOOL_LIST, cn } from './constants';
 import usePenPress from './hooks/usePenPress';
+
+import monkey1 from '../../assets/lottie/monkey1.json';
+import monkey2 from '../../assets/lottie/monkey2.json';
+import monkey3 from '../../assets/lottie/monkey3.json';
+
+const MONKEY_LIST = [monkey1, monkey2, monkey3];
 
 export default function CardsEditorToolbar({
   activeCanvasRef,
@@ -128,6 +135,23 @@ export default function CardsEditorToolbar({
             })}
           </div>
 
+          {/* 👇 3 con khỉ chạy liên tục cùng lúc */}
+          <div className="flex items-center gap-1 shrink-0">
+            {MONKEY_LIST.map((anim, i) => (
+              <div
+                key={i}
+                className="h-9 w-9 transition-all duration-300"
+              >
+                <Player
+                  autoplay
+                  loop
+                  src={anim}
+                  className="h-full w-full"
+                />
+              </div>
+            ))}
+          </div>
+
           <button
             type="button"
             {...bindPress(handleImportClick)}
@@ -170,7 +194,6 @@ export default function CardsEditorToolbar({
               }
               onPointerDown={(e) => {
                 e.stopPropagation();
-
                 if (e.pointerType === 'pen') {
                   e.currentTarget.click();
                 }
@@ -195,7 +218,6 @@ export default function CardsEditorToolbar({
               value={currentSize}
               onChange={(e) => {
                 const val = Number(e.target.value);
-
                 setToolbox((prev) =>
                   isEraser
                     ? { ...prev, eraserSize: val }
@@ -204,7 +226,6 @@ export default function CardsEditorToolbar({
               }}
               onPointerDown={(e) => {
                 e.stopPropagation();
-
                 if (e.pointerType === 'pen') {
                   e.currentTarget.setPointerCapture(e.pointerId);
                 }
@@ -217,7 +238,6 @@ export default function CardsEditorToolbar({
                     Math.min(1, (e.clientX - rect.left) / rect.width)
                   );
                   const val = Math.round(1 + percent * 99);
-
                   setToolbox((prev) =>
                     isEraser
                       ? { ...prev, eraserSize: val }
@@ -252,7 +272,6 @@ export default function CardsEditorToolbar({
               }
               onPointerDown={(e) => {
                 e.stopPropagation();
-
                 if (e.pointerType === 'pen') {
                   e.currentTarget.setPointerCapture(e.pointerId);
                 }
@@ -266,7 +285,6 @@ export default function CardsEditorToolbar({
                   );
                   const val = 0.1 + percent * 0.9;
                   const rounded = Math.round(val * 20) / 20;
-
                   setToolbox((prev) => ({
                     ...prev,
                     opacity: rounded,
@@ -279,7 +297,6 @@ export default function CardsEditorToolbar({
                 isEraser && 'cursor-not-allowed opacity-30'
               )}
             />
-
             <span className="w-[32px] text-right text-[11px] font-bold text-slate-600">
               {Math.round(toolbox.opacity * 100)}%
             </span>

@@ -1,6 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { FiFolder, FiFolderPlus, FiPackage, FiTrash2, FiEdit3 } from 'react-icons/fi';
+import {
+  FiFolder,
+  FiFolderPlus,
+  FiPackage,
+  FiTrash2,
+} from 'react-icons/fi';
 import { BsFolder2Open, BsPlayCircle } from 'react-icons/bs';
+import HeroLoading from '../Common/HeroLoading';
 import {
   deletePackage,
   getFlashcards,
@@ -79,65 +85,71 @@ export default function PackageList({
 
   if (loading) {
     return (
-      <div className="mx-auto flex min-h-[70vh] w-full max-w-7xl items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
-        <div className="soft-card px-8 py-8 text-center text-slate-500">
-          Đang tải gói...
-        </div>
-      </div>
+      <HeroLoading
+        title="Đang tải gói..."
+        message="Hệ thống đang chuẩn bị danh sách flashcard của bạn."
+      />
     );
   }
 
   return (
     <>
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/80 px-3 py-1 text-xs font-semibold text-sky-600 shadow-sm">
-              <FiFolder size={14} />
-              <span>Packages</span>
+      <header className="sticky top-0 z-30 mb-6 bg-transparent">
+        <div className="mx-auto flex w-full max-w-7xl justify-end px-4 pt-4 sm:px-6 lg:px-8">
+          <button
+            className="package-add-gradient inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(236,72,153,0.28)]"
+            onClick={onAddPackage}
+            type="button"
+          >
+            <FiFolderPlus size={18} />
+            <span>Tạo gói mới</span>
+          </button>
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-7xl px-4 pb-6 sm:px-6 lg:px-8">
+        {error && (
+          <div className="mb-6 rounded-3xl border border-rose-100 bg-rose-50/90 px-5 py-4 text-sm font-semibold text-rose-600 shadow-sm">
+            {error}
+          </div>
+        )}
+
+        {packages.length === 0 ? (
+          <div className="relative overflow-hidden rounded-[32px] border border-white/70 bg-white/75 px-6 py-12 text-center shadow-[0_24px_70px_rgba(15,23,42,0.10)] backdrop-blur-2xl">
+            <div className="pointer-events-none absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 rounded-full bg-sky-200/40 blur-3xl" />
+
+            <div className="relative mx-auto mb-5 inline-flex h-20 w-20 items-center justify-center rounded-[28px] border border-sky-100 bg-sky-50 text-sky-500 shadow-inner">
+              <FiPackage size={34} />
             </div>
 
-            <h2 className="text-3xl font-black tracking-tight text-slate-800">
-              Gói Flashcard
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Mỗi gói chứa nhiều flashcard để bạn học nhanh và trực quan hơn.
-            </p>
-          </div>
+            <h3 className="relative text-2xl font-black tracking-tight text-slate-800">
+              Bạn chưa có gói nào
+            </h3>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+            <p className="relative mx-auto mt-3 max-w-md text-sm leading-6 text-slate-500">
+              Hãy tạo gói đầu tiên để bắt đầu xây dựng bộ flashcard của riêng bạn.
+            </p>
+
             <button
-              className="soft-button gradient-primary h-12 rounded-2xl px-5 text-sm font-bold hover:-translate-y-0.5"
+              className="package-add-gradient relative mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_18px_40px_rgba(59,130,246,0.25)] transition hover:-translate-y-0.5"
               onClick={onAddPackage}
               type="button"
             >
               <FiFolderPlus size={18} />
-              <span>Tạo gói mới</span>
+              <span>Tạo gói đầu tiên</span>
             </button>
-          </div>
-        </div>
-
-        {error && <div className="status-error mb-6">{error}</div>}
-
-        {packages.length === 0 ? (
-          <div className="soft-card flex min-h-[300px] flex-col items-center justify-center px-6 py-10 text-center">
-            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-sky-50 text-sky-500">
-              <FiPackage size={28} />
-            </div>
-            <h3 className="text-xl font-bold text-slate-800">Bạn chưa có gói nào</h3>
-            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Hãy tạo gói đầu tiên để bắt đầu xây dựng bộ flashcard của riêng bạn.
-            </p>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {packages.map((item) => (
+            {packages.map((item, index) => (
               <div
                 key={item.id}
-                className="soft-card overflow-hidden transition duration-200 hover:-translate-y-1"
+                className="group relative overflow-hidden rounded-[30px] border border-white/70 bg-white/80 shadow-[0_18px_50px_rgba(15,23,42,0.10)] backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:shadow-[0_26px_70px_rgba(15,23,42,0.15)]"
               >
+                <div className="pointer-events-none absolute -right-14 -top-14 h-32 w-32 rounded-full bg-sky-200/35 blur-2xl transition group-hover:bg-pink-200/45" />
+
                 <div
-                  className="cursor-pointer px-5 py-5"
+                  className="relative cursor-pointer px-5 py-5"
                   onClick={() => onOpenPackage(item)}
                   role="button"
                   tabIndex={0}
@@ -148,22 +160,33 @@ export default function PackageList({
                     }
                   }}
                 >
-                  <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-500">
-                    <FiFolder size={13} />
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-100 to-pink-100 text-sky-600 shadow-inner">
+                      <FiFolder size={22} />
+                    </div>
+
+                    <div className="rounded-full border border-slate-100 bg-white/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 shadow-sm">
+                      #{index + 1}
+                    </div>
+                  </div>
+
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-slate-100 bg-slate-50/90 px-3 py-1 text-xs font-bold text-slate-500">
+                    <FiPackage size={13} />
                     <span>Flashcard package</span>
                   </div>
 
-                  <h3 className="line-clamp-1 text-lg font-black tracking-tight text-slate-800">
+                  <h3 className="line-clamp-1 text-xl font-black tracking-tight text-slate-800">
                     {item.name || 'Gói chưa đặt tên'}
                   </h3>
-                  <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-500">
+
+                  <p className="mt-2 min-h-[48px] line-clamp-2 text-sm leading-6 text-slate-500">
                     {item.description || 'Chưa có mô tả'}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 px-5 pb-5 sm:grid-cols-3">
+                <div className="relative grid grid-cols-1 gap-2 border-t border-slate-100/80 bg-slate-50/45 px-5 py-4 sm:grid-cols-3">
                   <button
-                    className="soft-button h-11 rounded-2xl border border-slate-200 bg-slate-900 px-4 text-white hover:bg-slate-800"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 px-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800"
                     onClick={() => onOpenPackage(item)}
                     type="button"
                   >
@@ -172,7 +195,7 @@ export default function PackageList({
                   </button>
 
                   <button
-                    className="soft-button h-11 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 text-emerald-700 hover:bg-emerald-100"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 text-sm font-bold text-emerald-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                     onClick={() => handleStudyClick(item)}
                     disabled={studyingId === item.id}
                     type="button"
@@ -182,7 +205,7 @@ export default function PackageList({
                   </button>
 
                   <button
-                    className="soft-button h-11 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-rose-600 hover:bg-rose-100"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 text-sm font-bold text-rose-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-100"
                     onClick={() => handleDeleteClick(item)}
                     type="button"
                   >
@@ -208,6 +231,21 @@ export default function PackageList({
         loading={isDeleting}
         onConfirm={handleConfirmDelete}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @keyframes package-gradient-x {
+              0%, 100% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+            }
+
+            .package-add-gradient {
+              animation: package-gradient-x 3s ease infinite;
+            }
+          `,
+        }}
       />
     </>
   );
