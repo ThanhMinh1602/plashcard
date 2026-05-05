@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { FiMaximize2 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'motion/react';
 import ConfirmModal from '../Common/ConfirmModal';
 import {
@@ -851,19 +852,26 @@ export default function CardsList({
                         handleDeleteCardPair={handleDeleteCardPair}
                       />
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={resetCardTransform}
-                      className="absolute right-3 top-3 z-50 rounded-full bg-slate-900/70 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm"
-                    >
-                      {Math.round(cardTransform.zoom * 100)}%
-                    </button>
                   </div>
                 </motion.div>
               )
             )}
           </AnimatePresence>
+          {cards.length > 0 && (
+            <button
+              type="button"
+              {...bindPress(resetCardTransform)}
+              onPointerDownCapture={(e) => e.stopPropagation()}
+              onPointerMoveCapture={(e) => e.stopPropagation()}
+              onPointerUpCapture={(e) => e.stopPropagation()}
+              data-allow-touch
+              className="absolute right-4 top-4 z-50 inline-flex h-8 items-center gap-1.5 rounded-full border border-white/70 bg-white/65 px-2.5 text-[10px] font-black text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition hover:bg-white hover:text-slate-900"
+              title="Trở về kích thước ban đầu"
+            >
+              <FiMaximize2 size={13} />
+              <span>{Math.round(cardTransform.zoom * 100)}%</span>
+            </button>
+          )}
         </div>
       </div>
       {isBackSaving && (
