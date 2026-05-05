@@ -33,6 +33,7 @@ export default function CardsList({
 }) {
   const bindPress = usePenPress();
   const BACK_CONFIRM_MONKEY_LIST = [monkey1, monkey2, monkey3];
+
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingAll, setSavingAll] = useState(false);
@@ -43,15 +44,15 @@ export default function CardsList({
   const [isDeletingCard, setIsDeletingCard] = useState(false);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [backConfirmMonkeyIndex, setBackConfirmMonkeyIndex] = useState(0);
-  const backConfirmMonkeyIndexRef = useRef(-1);
   const [toolbox, setToolbox] = useState(DEFAULT_TOOLBOX);
 
   const [currentEditId, setCurrentEditId] = useState(null);
   const thumbnailListRef = useRef(null);
+  const backConfirmMonkeyIndexRef = useRef(-1);
+  const savedCardsSnapshotRef = useRef([]);
 
   const cardGestureAreaRef = useRef(null);
   const touchPointersRef = useRef(new Map());
-
 
   const [cardTransform, setCardTransform] = useState({
     zoom: 1,
@@ -115,6 +116,94 @@ export default function CardsList({
 
   const canAddCard = packageName.trim().length > 0;
   const currentCard = cards.find((c) => c.localId === currentEditId);
+
+  const normalizeSnapshotValue = (value) => {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+
+  const createComparableCard = (card, override = {}) => {
+    return {
+      id: card.id || null,
+      front: normalizeSnapshotValue(override.front ?? card.front),
+      back: normalizeSnapshotValue(override.back ?? card.back),
+      frontData: normalizeSnapshotValue(
+        override.frontData ?? card.frontData
+      ),
+      backData: normalizeSnapshotValue(
+        override.backData ?? card.backData
+      ),
+    };
+  };
+
+  const shouldKeepCardInSnapshot = (card) => {
+    return Boolean(
+      card.id ||
+        card.front ||
+        card.back ||
+        card.frontData ||
+        card.backData
+    );
+  };
+
+  const buildSavedCardsSnapshot = (sourceCards) => {
+    return (sourceCards || [])
+      .map((card) => createComparableCard(card))
+      .filter(shouldKeepCardInSnapshot);
+  };
+
+  const getCurrentCardsSnapshot = () => {
+    const frontRef = currentEditId
+      ? getCanvasRefByKey(`${currentEditId}-front`)
+      : null;
+
+    const backRef = currentEditId
+      ? getCanvasRefByKey(`${currentEditId}-back`)
+      : null;
+
+    return (cards || [])
+      .map((card) => {
+        const isCurrent = card.localId === currentEditId;
+
+        if (!isCurrent) {
+          return createComparableCard(card);
+        }
+
+        const frontDataFromCanvas = frontRef?.getSceneData?.();
+        const backDataFromCanvas = backRef?.getSceneData?.();
+
+        return createComparableCard(card, {
+          frontData: frontDataFromCanvas || card.frontData,
+          backData: backDataFromCanvas || card.backData,
+        });
+      })
+      .filter(shouldKeepCardInSnapshot);
+  };
+
+  const markCardsSnapshotSaved = (sourceCards) => {
+    savedCardsSnapshotRef.current = buildSavedCardsSnapshot(sourceCards);
+  };
+
+  const removeCardFromSavedSnapshot = (cardId) => {
+    if (!cardId) return;
+
+    savedCardsSnapshotRef.current = savedCardsSnapshotRef.current.filter(
+      (card) => card.id !== cardId
+    );
+  };
+
+  const hasUnsavedCardChanges = (currentSnapshot = getCurrentCardsSnapshot()) => {
+    return (
+      JSON.stringify(currentSnapshot) !==
+      JSON.stringify(savedCardsSnapshotRef.current)
+    );
+  };
 
   const saveCurrentActiveCardData = () => {
     if (!currentEditId) return;
@@ -241,6 +330,7 @@ export default function CardsList({
       );
 
       setCards(normalized);
+      markCardsSnapshotSaved(normalized);
 
       if (normalized.length > 0) {
         setCurrentEditId(normalized[0].localId);
@@ -312,6 +402,7 @@ export default function CardsList({
 
       if (target.id) {
         await deleteFlashcard(user.uid, packageItem.id, target.id);
+        removeCardFromSavedSnapshot(target.id);
       }
 
       removeCardBindings(localId);
@@ -461,6 +552,7 @@ export default function CardsList({
       }
 
       setCards(nextCards);
+      markCardsSnapshotSaved(nextCards);
 
       if (showMessage) {
         setSaveMessage('Đã lưu toàn bộ thẻ');
@@ -488,7 +580,6 @@ export default function CardsList({
 
     setIsBackSaving(true);
 
-    // Cho React kịp render modal trước khi chạy toDataURL / lưu Firestore
     await waitForNextPaint();
 
     await saveAllCards({ showMessage: true });
@@ -499,7 +590,10 @@ export default function CardsList({
   const handleBackClick = async () => {
     if (savingAll || isBackSaving) return;
 
-    if (cards.length === 0) {
+    const currentSnapshot = getCurrentCardsSnapshot();
+    const savedSnapshot = savedCardsSnapshotRef.current;
+
+    if (currentSnapshot.length === 0 && savedSnapshot.length === 0) {
       try {
         if (user?.uid && packageItem?.id) {
           await deletePackage(user.uid, packageItem.id);
@@ -511,6 +605,11 @@ export default function CardsList({
         setError('Lỗi thoát gói rỗng');
       }
 
+      return;
+    }
+
+    if (!hasUnsavedCardChanges(currentSnapshot)) {
+      onBack?.();
       return;
     }
 
@@ -527,6 +626,7 @@ export default function CardsList({
     setShowBackConfirm(false);
     onBack?.();
   };
+
   const MIN_CARD_ZOOM = 0.65;
   const MAX_CARD_ZOOM = 2.5;
 
@@ -593,7 +693,6 @@ export default function CardsList({
   };
 
   const handleCardPointerDownCapture = (e) => {
-    // Chỉ tay mới zoom/pan. Bút thì bỏ qua hoàn toàn.
     if (e.pointerType !== 'touch') return;
 
     touchPointersRef.current.set(e.pointerId, {
@@ -647,8 +746,6 @@ export default function CardsList({
       y: metrics.midpoint.y - rect.top,
     };
 
-    // Công thức quan trọng:
-    // Giữ đúng điểm nằm dưới tâm 2 ngón tay khi zoom.
     const nextX = localMidpoint.x - gesture.contentPoint.x * nextZoom;
     const nextY = localMidpoint.y - gesture.contentPoint.y * nextZoom;
 
@@ -688,6 +785,7 @@ export default function CardsList({
       y: 0,
     });
   };
+
   if (loading) {
     return (
       <div className="mx-auto flex min-h-screen w-full items-center justify-center">
@@ -877,7 +975,9 @@ export default function CardsList({
                     >
                       <FlashcardPairItem
                         item={currentCard}
-                        index={cards.findIndex((c) => c.localId === currentEditId)}
+                        index={cards.findIndex(
+                          (c) => c.localId === currentEditId
+                        )}
                         activeCanvasKey={activeCanvasKey}
                         setActiveCanvasKey={setActiveCanvasKey}
                         setPairCardRef={setPairCardRef}
@@ -892,6 +992,7 @@ export default function CardsList({
               )
             )}
           </AnimatePresence>
+
           {cards.length > 0 && (
             <button
               type="button"
@@ -909,6 +1010,7 @@ export default function CardsList({
           )}
         </div>
       </div>
+
       {isBackSaving && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm">
           <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]">
@@ -931,6 +1033,7 @@ export default function CardsList({
           </div>
         </div>
       )}
+
       <ConfirmModal
         open={showBackConfirm}
         title="Thoát mà không lưu?"

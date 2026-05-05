@@ -83,21 +83,21 @@ export default function PackageList({
     }
   };
 
-  if (loading) {
-    return (
-      <HeroLoading
-        title="Đang tải gói..."
-        message="Hệ thống đang chuẩn bị danh sách flashcard của bạn."
-      />
-    );
-  }
+  // if (loading) {
+  //   return (
+  //     <HeroLoading
+  //       title="Đang tải gói..."
+  //       message="Hệ thống đang chuẩn bị danh sách flashcard của bạn."
+  //     />
+  //   );
+  // }
 
   return (
     <>
-      <header className="sticky top-0 z-30 mb-6 bg-transparent">
-        <div className="mx-auto flex w-full max-w-7xl justify-end px-4 pt-4 sm:px-6 lg:px-8">
+      <div className="fixed inset-x-0 top-[100px] z-50 pointer-events-none">
+        <div className="mx-auto flex w-full max-w-7xl justify-end px-4 sm:px-6 lg:px-8">
           <button
-            className="package-add-gradient inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(236,72,153,0.28)]"
+            className="package-add-gradient pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(236,72,153,0.28)]"
             onClick={onAddPackage}
             type="button"
           >
@@ -105,9 +105,9 @@ export default function PackageList({
             <span>Tạo gói mới</span>
           </button>
         </div>
-      </header>
+      </div>
 
-      <div className="mx-auto w-full max-w-7xl px-4 pb-6 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl px-4 pt-20 pb-6 sm:px-6 lg:px-8">
         {error && (
           <div className="mb-6 rounded-3xl border border-rose-100 bg-rose-50/90 px-5 py-4 text-sm font-semibold text-rose-600 shadow-sm">
             {error}
@@ -222,9 +222,8 @@ export default function PackageList({
       <ConfirmModal
         open={Boolean(deleteTarget)}
         title="Xóa gói này?"
-        message={`${
-          deleteTarget?.name?.trim() || 'Gói chưa đặt tên'
-        } sẽ bị xóa cùng toàn bộ flashcard bên trong.`}
+        message={`${deleteTarget?.name?.trim() || 'Gói chưa đặt tên'
+          } sẽ bị xóa cùng toàn bộ flashcard bên trong.`}
         confirmText="Xóa gói"
         cancelText="Hủy"
         variant="danger"

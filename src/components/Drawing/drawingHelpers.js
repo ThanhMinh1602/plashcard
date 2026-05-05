@@ -6,50 +6,44 @@ export const CANVAS_SCALE =
 export const getDynamicStrokeOptions = (brushType, size) => {
   const safeSize = Math.max(Number(size) || 1, 1);
 
-  // CẤU HÌNH BÚT MỰC (Pen) - Nét tròn đều, siêu mượt, không thanh đậm
   const baseOptions = {
     size: safeSize,
-    thinning: 0,             // 0 = Kích thước nét luôn cố định, không bị ảnh hưởng bởi lực nhấn hay tốc độ
-    smoothing: 0.85,         // Đẩy lên rất cao để khử rung tay, nét uốn lượn cực mượt
-    streamline: 0.85,        // Đẩy lên cao để thuật toán nối các điểm trơn tru hơn
-    simulatePressure: false, // Tắt hoàn toàn áp lực
-    start: {
-      taper: 0,              // Tắt vót nhọn đầu bút
-      cap: true,             // Bo tròn đầu
-    },
-    end: {
-      taper: 0,              // Tắt vót nhọn đuôi bút
-      cap: true,             // Bo tròn đuôi
-    },
+    thinning: 0,
+    smoothing: 0.92,   // tăng từ 0.85 → 0.92
+    streamline: 0.92,  // tăng từ 0.85 → 0.92
+    simulatePressure: false,
+    last: true,        // ✅ thêm: buộc perfect-freehand tính điểm cuối chính xác
+    start: { taper: 0, cap: true },
+    end: { taper: 0, cap: true },
   };
 
   switch (brushType) {
-    case 'pencil': 
+    case 'pencil':
       return {
         ...baseOptions,
         size: safeSize * 0.8,
-        smoothing: 0.6,      // Bút chì giảm mượt đi một chút để giữ lại độ cứng cáp
-        streamline: 0.6,
+        smoothing: 0.75,
+        streamline: 0.75,
       };
 
-    case 'marker': 
+    case 'marker':
       return {
         ...baseOptions,
         size: safeSize * 1.8,
-        smoothing: 0.9,      // Marker cần độ mượt tối đa
-        streamline: 0.9,
+        smoothing: 0.95,
+        streamline: 0.95,
       };
 
-    case 'calligraphy': 
+    case 'calligraphy':
       return {
         ...baseOptions,
         size: safeSize * 1.2,
-        // Riêng cọ thư pháp (Calligraphy) thì bắt buộc phải giữ lại thanh đậm
-        thinning: 0.85,      
-        smoothing: 0.8,
-        streamline: 0.8,
-        start: { taper: safeSize * 2, cap: true },
-        end: { taper: safeSize * 2, cap: true },
+        thinning: 0.55,       // giảm từ 0.85 → 0.55: tránh nét thu hẹp quá mức gây đứt
+        smoothing: 0.96,      // tăng tối đa để uốn lượn mượt
+        streamline: 0.96,
+        simulatePressure: true, // bật lại simulate để áp lực thay đổi từ từ, không giật cục
+        start: { taper: safeSize * 1.5, cap: true },
+        end: { taper: safeSize * 1.5, cap: true },
       };
 
     case 'pen':
@@ -103,6 +97,13 @@ export const getDistance = (a, b) => {
   return Math.hypot(dx, dy);
 };
 
+// ✅ FIX CHÍNH: Thêm exponential smoothing để làm mịn tọa độ trước khi lưu
+// Thay vì nội suy thẳng, dùng EMA (Exponential Moving Average) để điểm mới
+// bị "kéo" về phía điểm cũ → loại bỏ gấp khúc do rung tay hoặc sampling thưa.
+// EMA alpha: 0 = bám sát lịch sử (mượt nhất), 1 = không làm mịn
+// 0.30 cân bằng tốt giữa độ mượt và độ bám nét thực tế
+const SMOOTH_ALPHA = 0.30;
+
 export const appendSmoothPoint = (points, nextPoint) => {
   const lastPoint = points[points.length - 1];
 
@@ -113,23 +114,31 @@ export const appendSmoothPoint = (points, nextPoint) => {
 
   const distance = getDistance(lastPoint, nextPoint);
 
-  if (distance < 0.7) return;
+  // Bỏ qua điểm quá gần (giảm từ 0.7 → 1.0 để bớt noise)
+  if (distance < 1.0) return;
 
-  if (distance > 6) {
-    const steps = Math.min(8, Math.floor(distance / 3));
+  // Áp dụng EMA: smoothedPoint = alpha * next + (1-alpha) * last
+  const smoothed = [
+    SMOOTH_ALPHA * nextPoint[0] + (1 - SMOOTH_ALPHA) * lastPoint[0],
+    SMOOTH_ALPHA * nextPoint[1] + (1 - SMOOTH_ALPHA) * lastPoint[1],
+    nextPoint[2], // áp lực giữ nguyên
+  ];
 
-    for (let i = 1; i < steps; i += 1) {
+  // Với khoảng cách lớn: nội suy thêm điểm trung gian để không bị "nhảy cóc"
+  if (distance > 8) {
+    const steps = Math.min(6, Math.floor(distance / 4));
+
+    for (let i = 1; i < steps; i++) {
       const t = i / steps;
-
       points.push([
-        lastPoint[0] + (nextPoint[0] - lastPoint[0]) * t,
-        lastPoint[1] + (nextPoint[1] - lastPoint[1]) * t,
-        lastPoint[2] + (nextPoint[2] - lastPoint[2]) * t,
+        lastPoint[0] + (smoothed[0] - lastPoint[0]) * t,
+        lastPoint[1] + (smoothed[1] - lastPoint[1]) * t,
+        lastPoint[2] + (smoothed[2] - lastPoint[2]) * t,
       ]);
     }
   }
 
-  points.push(nextPoint);
+  points.push(smoothed);
 };
 
 export const drawGridPaperBackground = (
@@ -152,8 +161,6 @@ export const drawGridPaperBackground = (
   context.fillStyle = backgroundColor;
   context.fillRect(0, 0, width, height);
 
-  // Vùng màu dưới cùng, tính theo số ô nhỏ.
-  // Ví dụ gridSize 24 và bottomTintRows 8 => cao 192px.
   if (bottomTintColor && bottomTintRows > 0) {
     const tintHeight = Math.min(height, gridSize * bottomTintRows);
     const tintY = height - tintHeight;
@@ -162,7 +169,6 @@ export const drawGridPaperBackground = (
     context.fillRect(0, tintY, width, tintHeight);
   }
 
-  // Chỉ vẽ ô nhỏ đều nhau, không vẽ viền đậm ô lớn.
   context.beginPath();
   context.strokeStyle = gridColor;
   context.lineWidth = 1;
