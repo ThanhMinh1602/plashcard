@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   FiUpload,
   FiCornerUpLeft,
@@ -28,7 +28,17 @@ export default function CardsEditorToolbar({
 
   const isEraser = toolbox.tool === 'eraser';
   const currentSize = isEraser ? toolbox.eraserSize || 20 : toolbox.size;
+  const maxSize = isEraser ? 100 : 50;
+  const displaySize = Math.min(currentSize, maxSize);
 
+  useEffect(() => {
+    if (!isEraser && toolbox.size > 50) {
+      setToolbox((prev) => ({
+        ...prev,
+        size: 50,
+      }));
+    }
+  }, [isEraser, toolbox.size, setToolbox]);
   return (
     <div className="rounded-xl border border-slate-200 bg-white/50 px-3 py-1.5 shadow-sm">
       <div className="flex w-full flex-col gap-2 overflow-x-auto pb-0.5">
@@ -214,10 +224,10 @@ export default function CardsEditorToolbar({
             <input
               type="range"
               min="1"
-              max="100"
-              value={currentSize}
+              max={maxSize}
+              value={displaySize}
               onChange={(e) => {
-                const val = Number(e.target.value);
+                const val = Math.min(Number(e.target.value), maxSize);
                 setToolbox((prev) =>
                   isEraser
                     ? { ...prev, eraserSize: val }
@@ -237,7 +247,7 @@ export default function CardsEditorToolbar({
                     0,
                     Math.min(1, (e.clientX - rect.left) / rect.width)
                   );
-                  const val = Math.round(1 + percent * 99);
+                  const val = Math.round(1 + percent * (maxSize - 1));
                   setToolbox((prev) =>
                     isEraser
                       ? { ...prev, eraserSize: val }
@@ -249,7 +259,7 @@ export default function CardsEditorToolbar({
             />
 
             <span className="w-[24px] text-right text-[11px] font-bold text-slate-600">
-              {currentSize}
+              {displaySize}
             </span>
           </div>
 

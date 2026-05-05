@@ -145,10 +145,10 @@ export default function CardsList({
   const shouldKeepCardInSnapshot = (card) => {
     return Boolean(
       card.id ||
-        card.front ||
-        card.back ||
-        card.frontData ||
-        card.backData
+      card.front ||
+      card.back ||
+      card.frontData ||
+      card.backData
     );
   };
 
@@ -351,6 +351,9 @@ export default function CardsList({
     if (currentEditId === targetId) return;
 
     saveCurrentActiveCardData();
+
+    resetCardTransform();
+
     setCurrentEditId(targetId);
     setActiveCanvasKey(`${targetId}-front`);
   };
@@ -364,6 +367,8 @@ export default function CardsList({
     }
 
     saveCurrentActiveCardData();
+
+    resetCardTransform();
 
     const newCard = createLocalCard();
 
