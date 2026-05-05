@@ -16,7 +16,40 @@ const SWIPE_THRESHOLD = 80;
 const SWIPE_VELOCITY = 500;
 const MONKEY_LIST = [monkey1, monkey2, monkey3];
 
-function StudyCardFace({ src, side }) {
+function getCardCreatedOrder(card, fallbackIndex) {
+  const value =
+    card?.createdAt ||
+    card?.created_at ||
+    card?.createdTime ||
+    card?.createdDate;
+
+  if (value?.toMillis) {
+    return value.toMillis();
+  }
+
+  if (typeof value?.seconds === 'number') {
+    return value.seconds * 1000 + (value.nanoseconds || 0) / 1000000;
+  }
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallbackIndex;
+}
+
+function StudyCardFace({ src, side, onImageLoad }) {
   const isFront = side === 'front';
 
   return (
@@ -32,8 +65,22 @@ function StudyCardFace({ src, side }) {
           <img
             src={src}
             alt={isFront ? 'Mặt trước flashcard' : 'Mặt sau flashcard'}
-            className="block h-full w-full select-none object-fill"
+            className="block h-full w-full select-none object-contain"
             draggable={false}
+            decoding="async"
+            loading="eager"
+            onLoad={(e) => {
+              const { naturalWidth, naturalHeight } = e.currentTarget;
+
+              if (naturalWidth > 0 && naturalHeight > 0) {
+                onImageLoad?.(src, naturalWidth / naturalHeight);
+              }
+            }}
+            style={{
+              imageRendering: 'auto',
+              backfaceVisibility: 'hidden',
+              transform: 'translateZ(0)',
+            }}
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-3">
@@ -53,10 +100,20 @@ function StudyCardFace({ src, side }) {
 export default function StudyScreen({ packageItem, cards = [], onBack }) {
   const normalizedCards = useMemo(
     () =>
-      (cards || []).map((card, index) => ({
-        ...card,
-        _studyKey: card.id || card.localId || `study-card-${index}`,
-      })),
+      (cards || [])
+        .map((card, index) => ({
+          ...card,
+          _originalIndex: index,
+          _createdOrder: getCardCreatedOrder(card, index),
+          _studyKey: card.id || card.localId || `study-card-${index}`,
+        }))
+        .sort((a, b) => {
+          if (a._createdOrder !== b._createdOrder) {
+            return a._createdOrder - b._createdOrder;
+          }
+
+          return a._originalIndex - b._originalIndex;
+        }),
     [cards]
   );
 
@@ -64,6 +121,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [flyOutDirection, setFlyOutDirection] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [imageRatios, setImageRatios] = useState({});
 
   const didDragRef = useRef(false);
 
@@ -75,6 +133,26 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
 
   const flyOutDistance =
     typeof window !== 'undefined' ? window.innerWidth * 1.15 : 1400;
+
+  const currentAspectRatio =
+    imageRatios[currentCard?.front] ||
+    imageRatios[currentCard?.back] ||
+    5 / 7;
+
+  const handleImageLoad = (src, ratio) => {
+    if (!src || !Number.isFinite(ratio) || ratio <= 0) return;
+
+    setImageRatios((prev) => {
+      if (Math.abs((prev[src] || 0) - ratio) < 0.001) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [src]: ratio,
+      };
+    });
+  };
 
   useEffect(() => {
     setCurrentIndex(0);
@@ -327,7 +405,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
               </div>
             </motion.div>
           ) : (
-            <div className="relative w-full max-w-[430px] sm:max-w-[480px] md:max-w-[540px]">
+          <div className="relative w-full max-w-[320px] sm:max-w-[360px] md:max-w-[400px]">
               {[...previewCards].reverse().map((card, reverseIndex) => {
                 const depth = previewCards.length - reverseIndex;
                 const scale = 1 - depth * 0.04;
@@ -354,7 +432,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
 
               <motion.div
                 key={currentCard._studyKey}
-                className="relative aspect-[5/7] w-full cursor-grab touch-pan-y select-none active:cursor-grabbing"
+                className="relative w-full cursor-grab touch-pan-y select-none active:cursor-grabbing"
                 initial={{ opacity: 0, y: 20, scale: 0.96 }}
                 animate={
                   flyOutDirection
@@ -374,7 +452,12 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                 drag="x"
                 dragConstraints={{ left: 0, right: 0 }}
                 dragElastic={0.16}
-                style={{ x, rotate: tilt, touchAction: 'none' }}
+                style={{
+                  x,
+                  rotate: tilt,
+                  touchAction: 'none',
+                  aspectRatio: currentAspectRatio,
+                }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 onClick={handleCardClick}
@@ -384,8 +467,16 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                   animate={{ rotateY: isFlipped ? 180 : 0 }}
                   transition={{ duration: 0.45 }}
                 >
-                  <StudyCardFace src={currentCard.front} side="front" />
-                  <StudyCardFace src={currentCard.back} side="back" />
+                  <StudyCardFace
+                    src={currentCard.front}
+                    side="front"
+                    onImageLoad={handleImageLoad}
+                  />
+                  <StudyCardFace
+                    src={currentCard.back}
+                    side="back"
+                    onImageLoad={handleImageLoad}
+                  />
                 </motion.div>
               </motion.div>
 
