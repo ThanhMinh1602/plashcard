@@ -6,6 +6,7 @@ import {
   FRONT_PAPER_COLOR,
   cn,
 } from './constants';
+import usePenPress from './hooks/usePenPress';
 
 export default function FlashcardPairItem({
   item,
@@ -18,14 +19,16 @@ export default function FlashcardPairItem({
   handleCanvasStatusChange,
   handleDeleteCardPair,
 }) {
+  const bindPress = usePenPress();
+
   const frontKey = `${item.localId}-front`;
   const backKey = `${item.localId}-back`;
 
   const isFrontActive = activeCanvasKey === frontKey;
   const isBackActive = activeCanvasKey === backKey;
 
-  // Lấy ra đúng size muốn dùng cho thẻ
-  const currentSize = toolbox.tool === 'eraser' ? (toolbox.eraserSize || 20) : toolbox.size;
+  const currentSize =
+    toolbox.tool === 'eraser' ? toolbox.eraserSize || 20 : toolbox.size;
 
   return (
     <div
@@ -51,7 +54,7 @@ export default function FlashcardPairItem({
 
         <button
           type="button"
-          onClick={() => handleDeleteCardPair(item.localId)}
+          {...bindPress(() => handleDeleteCardPair(item.localId))}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-sm font-semibold text-rose-600 transition hover:-translate-y-0.5 hover:bg-rose-100"
         >
           <FiTrash2 size={16} />
@@ -79,7 +82,7 @@ export default function FlashcardPairItem({
               tool={toolbox.tool}
               brushType={toolbox.brushType}
               color={toolbox.color}
-              size={currentSize} // TRUYỀN BIẾN SIZE MỚI VÀO ĐÂY
+              size={currentSize}
               opacity={toolbox.opacity}
               backgroundColor={FRONT_PAPER_COLOR}
               inputMode="stylusOnly"
@@ -112,7 +115,7 @@ export default function FlashcardPairItem({
               tool={toolbox.tool}
               brushType={toolbox.brushType}
               color={toolbox.color}
-              size={currentSize} // TRUYỀN BIẾN SIZE MỚI VÀO ĐÂY
+              size={currentSize}
               opacity={toolbox.opacity}
               backgroundColor={BACK_PAPER_COLOR}
               inputMode="stylusOnly"

@@ -102,7 +102,9 @@ export default function useCanvasRegistry({ cards, packageId }) {
     ? canvasRefs.current[activeCanvasKey]
     : null;
 
-  const activeStatus = canvasStatusMap[activeCanvasKey] || DEFAULT_STATUS;
+  const activeStatus = activeCanvasKey
+    ? canvasStatusMap[activeCanvasKey] || DEFAULT_STATUS
+    : DEFAULT_STATUS;
 
   return {
     activeCanvasKey,
