@@ -29,6 +29,7 @@ export default function CardsList({
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingAll, setSavingAll] = useState(false);
+  const [isBackSaving, setIsBackSaving] = useState(false);
   const [error, setError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [deleteTargetId, setDeleteTargetId] = useState(null);
@@ -176,7 +177,23 @@ export default function CardsList({
 
       const userCards = await getFlashcards(user.uid, packageItem.id);
 
-      const normalized = userCards.map((item) =>
+      const sortedCards = [...userCards].sort((a, b) => {
+        const aTime =
+          a.createdAt?.toMillis?.() ||
+          a.createdAt?.seconds ||
+          a.createdAt ||
+          0;
+
+        const bTime =
+          b.createdAt?.toMillis?.() ||
+          b.createdAt?.seconds ||
+          b.createdAt ||
+          0;
+
+        return aTime - bTime;
+      });
+
+      const normalized = sortedCards.map((item) =>
         createLocalCard({
           localId: item.id,
           id: item.id,
@@ -307,14 +324,20 @@ export default function CardsList({
     }
   };
 
-  const handleSaveAll = async () => {
-    if (!user || !packageItem?.id) return;
+  const saveAllCards = async ({ showMessage = true } = {}) => {
+    if (!user || !packageItem?.id) {
+      return false;
+    }
+
+    if (savingAll) {
+      return false;
+    }
 
     setError('');
     setSaveMessage('');
 
     if (!ensurePackageName('Bạn phải nhập tên gói trước khi lưu thẻ')) {
-      return;
+      return false;
     }
 
     try {
@@ -402,13 +425,46 @@ export default function CardsList({
       }
 
       setCards(nextCards);
-      setSaveMessage('Đã lưu toàn bộ thẻ');
+
+      if (showMessage) {
+        setSaveMessage('Đã lưu toàn bộ thẻ');
+      }
+
+      return true;
     } catch (err) {
       console.error(err);
       setError('Lỗi lưu thẻ');
+      return false;
     } finally {
       setSavingAll(false);
     }
+  };
+
+  const handleSaveAll = () => {
+    saveAllCards({ showMessage: true });
+  };
+  const waitForNextPaint = () =>
+    new Promise((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+      });
+    });
+  const handleBackAndSave = async () => {
+    if (savingAll || isBackSaving) return;
+
+    setIsBackSaving(true);
+
+    // Cho React kịp render modal trước khi chạy toDataURL / lưu Firestore
+    await waitForNextPaint();
+
+    const saved = await saveAllCards({ showMessage: false });
+
+    if (saved) {
+      onBack?.();
+      return;
+    }
+
+    setIsBackSaving(false);
   };
 
   if (loading) {
@@ -438,7 +494,7 @@ export default function CardsList({
         >
           <div className="mx-auto w-full max-w-[1500px]">
             <CardsEditorHeader
-              onBack={onBack}
+              onBack={handleBackAndSave}
               isEditingName={isEditingName}
               headerNameInputRef={headerNameInputRef}
               draftPackageName={draftPackageName}
@@ -450,7 +506,7 @@ export default function CardsList({
               packageName={packageName}
               isAutoSaving={isAutoSaving}
               handleSaveAll={handleSaveAll}
-              savingAll={savingAll}
+             savingAll={savingAll || isBackSaving}
               nameError={nameError}
               cardsCount={cards.length}
               activeCanvasKey={activeCanvasKey}
@@ -601,7 +657,21 @@ export default function CardsList({
           </AnimatePresence>
         </div>
       </div>
+      {isBackSaving && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm">
+          <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]">
+            <div className="mb-4 h-11 w-11 animate-spin rounded-full border-4 border-slate-200 border-t-sky-500" />
 
+            <h3 className="text-lg font-black text-slate-800">
+              Đang lưu thẻ...
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Vui lòng không thoát ứng dụng trong lúc hệ thống đang lưu dữ liệu.
+            </p>
+          </div>
+        </div>
+      )}
       <ConfirmModal
         open={Boolean(deleteTargetId)}
         title="Xóa cặp thẻ này?"
