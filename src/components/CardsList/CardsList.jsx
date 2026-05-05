@@ -39,6 +39,31 @@ export default function CardsList({
   const [currentEditId, setCurrentEditId] = useState(null);
   const thumbnailListRef = useRef(null);
 
+  const cardGestureAreaRef = useRef(null);
+  const touchPointersRef = useRef(new Map());
+
+  const [cardTransform, setCardTransform] = useState({
+    zoom: 1,
+    x: 0,
+    y: 0,
+  });
+
+  const cardTransformRef = useRef({
+    zoom: 1,
+    x: 0,
+    y: 0,
+  });
+
+  const pinchGestureRef = useRef({
+    active: false,
+    startDistance: 0,
+    startZoom: 1,
+    contentPoint: {
+      x: 0,
+      y: 0,
+    },
+  });
+
   const {
     packageName,
     packageDescription,
@@ -466,7 +491,167 @@ export default function CardsList({
 
     setIsBackSaving(false);
   };
+  const MIN_CARD_ZOOM = 0.65;
+  const MAX_CARD_ZOOM = 2.5;
 
+  const clampCardZoom = (value) => {
+    return Math.max(MIN_CARD_ZOOM, Math.min(MAX_CARD_ZOOM, value));
+  };
+
+  const updateCardTransform = (nextTransform) => {
+    const safeTransform = {
+      zoom: clampCardZoom(nextTransform.zoom),
+      x: nextTransform.x,
+      y: nextTransform.y,
+    };
+
+    cardTransformRef.current = safeTransform;
+    setCardTransform(safeTransform);
+  };
+
+  const getTouchPoints = () => {
+    return Array.from(touchPointersRef.current.values());
+  };
+
+  const getPinchMetrics = () => {
+    const points = getTouchPoints();
+
+    if (points.length < 2) {
+      return null;
+    }
+
+    const [a, b] = points;
+
+    return {
+      distance: Math.hypot(b.x - a.x, b.y - a.y),
+      midpoint: {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+      },
+    };
+  };
+
+  const startPinchGesture = () => {
+    const area = cardGestureAreaRef.current;
+    const metrics = getPinchMetrics();
+
+    if (!area || !metrics) return;
+
+    const rect = area.getBoundingClientRect();
+    const currentTransform = cardTransformRef.current;
+
+    const localMidpoint = {
+      x: metrics.midpoint.x - rect.left,
+      y: metrics.midpoint.y - rect.top,
+    };
+
+    pinchGestureRef.current = {
+      active: true,
+      startDistance: metrics.distance || 1,
+      startZoom: currentTransform.zoom,
+      contentPoint: {
+        x: (localMidpoint.x - currentTransform.x) / currentTransform.zoom,
+        y: (localMidpoint.y - currentTransform.y) / currentTransform.zoom,
+      },
+    };
+  };
+
+  const handleCardPointerDownCapture = (e) => {
+    // Chỉ tay mới zoom/pan. Bút thì bỏ qua hoàn toàn.
+    if (e.pointerType !== 'touch') return;
+
+    touchPointersRef.current.set(e.pointerId, {
+      x: e.clientX,
+      y: e.clientY,
+    });
+
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+
+    if (touchPointersRef.current.size >= 2) {
+      e.preventDefault();
+      e.stopPropagation();
+      startPinchGesture();
+    }
+  };
+
+  const handleCardPointerMoveCapture = (e) => {
+    if (e.pointerType !== 'touch') return;
+
+    if (!touchPointersRef.current.has(e.pointerId)) return;
+
+    touchPointersRef.current.set(e.pointerId, {
+      x: e.clientX,
+      y: e.clientY,
+    });
+
+    if (touchPointersRef.current.size < 2) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const area = cardGestureAreaRef.current;
+    const metrics = getPinchMetrics();
+
+    if (!area || !metrics) return;
+
+    if (!pinchGestureRef.current.active) {
+      startPinchGesture();
+      return;
+    }
+
+    const rect = area.getBoundingClientRect();
+    const gesture = pinchGestureRef.current;
+
+    const nextZoom = clampCardZoom(
+      gesture.startZoom * (metrics.distance / gesture.startDistance)
+    );
+
+    const localMidpoint = {
+      x: metrics.midpoint.x - rect.left,
+      y: metrics.midpoint.y - rect.top,
+    };
+
+    // Công thức quan trọng:
+    // Giữ đúng điểm nằm dưới tâm 2 ngón tay khi zoom.
+    const nextX = localMidpoint.x - gesture.contentPoint.x * nextZoom;
+    const nextY = localMidpoint.y - gesture.contentPoint.y * nextZoom;
+
+    updateCardTransform({
+      zoom: nextZoom,
+      x: nextX,
+      y: nextY,
+    });
+  };
+
+  const handleCardPointerEndCapture = (e) => {
+    if (e.pointerType !== 'touch') return;
+
+    touchPointersRef.current.delete(e.pointerId);
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+
+    if (touchPointersRef.current.size >= 2) {
+      startPinchGesture();
+      return;
+    }
+
+    pinchGestureRef.current = {
+      active: false,
+      startDistance: 0,
+      startZoom: cardTransformRef.current.zoom,
+      contentPoint: {
+        x: 0,
+        y: 0,
+      },
+    };
+  };
+
+  const resetCardTransform = () => {
+    updateCardTransform({
+      zoom: 1,
+      x: 0,
+      y: 0,
+    });
+  };
   if (loading) {
     return (
       <div className="mx-auto flex min-h-screen w-full items-center justify-center">
@@ -506,7 +691,7 @@ export default function CardsList({
               packageName={packageName}
               isAutoSaving={isAutoSaving}
               handleSaveAll={handleSaveAll}
-             savingAll={savingAll || isBackSaving}
+              savingAll={savingAll || isBackSaving}
               nameError={nameError}
               cardsCount={cards.length}
               activeCanvasKey={activeCanvasKey}
@@ -638,19 +823,43 @@ export default function CardsList({
                     mass: 0.8,
                   }}
                 >
-                  <FlashcardPairItem
-                    item={currentCard}
-                    index={cards.findIndex(
-                      (c) => c.localId === currentEditId
-                    )}
-                    activeCanvasKey={activeCanvasKey}
-                    setActiveCanvasKey={setActiveCanvasKey}
-                    setPairCardRef={setPairCardRef}
-                    setCanvasRef={setCanvasRef}
-                    toolbox={toolbox}
-                    handleCanvasStatusChange={handleCanvasStatusChange}
-                    handleDeleteCardPair={handleDeleteCardPair}
-                  />
+                  <div
+                    ref={cardGestureAreaRef}
+                    className="relative"
+                    style={{ touchAction: 'none' }}
+                    onPointerDownCapture={handleCardPointerDownCapture}
+                    onPointerMoveCapture={handleCardPointerMoveCapture}
+                    onPointerUpCapture={handleCardPointerEndCapture}
+                    onPointerCancelCapture={handleCardPointerEndCapture}
+                  >
+                    <div
+                      className="origin-top-left will-change-transform"
+                      style={{
+                        transform: `translate3d(${cardTransform.x}px, ${cardTransform.y}px, 0) scale(${cardTransform.zoom})`,
+                        transformOrigin: '0 0',
+                      }}
+                    >
+                      <FlashcardPairItem
+                        item={currentCard}
+                        index={cards.findIndex((c) => c.localId === currentEditId)}
+                        activeCanvasKey={activeCanvasKey}
+                        setActiveCanvasKey={setActiveCanvasKey}
+                        setPairCardRef={setPairCardRef}
+                        setCanvasRef={setCanvasRef}
+                        toolbox={toolbox}
+                        handleCanvasStatusChange={handleCanvasStatusChange}
+                        handleDeleteCardPair={handleDeleteCardPair}
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={resetCardTransform}
+                      className="absolute right-3 top-3 z-50 rounded-full bg-slate-900/70 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm"
+                    >
+                      {Math.round(cardTransform.zoom * 100)}%
+                    </button>
+                  </div>
                 </motion.div>
               )
             )}
