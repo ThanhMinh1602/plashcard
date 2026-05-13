@@ -118,7 +118,7 @@ export const saveCardSide = async (userId, packageId, sideDocId, data) => {
 export const getFlashcards = async (userId, packageId) => {
   try {
     const cardsRef = collection(db, 'users', userId, 'packages', packageId, 'cards');
-    const q = query(cardsRef, orderBy('updatedAt', 'desc'));
+    const q = query(cardsRef, orderBy('updatedAt'));
     const querySnapshot = await getDocs(q);
     const docs = [];
     querySnapshot.forEach((item) => {

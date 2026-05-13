@@ -24,9 +24,20 @@ export const BRUSH_TYPES = [
 export const DEFAULT_TOOLBOX = {
   tool: 'brush',
   brushType: 'pen',
-  color: '#0f172a',
+  // Xóa trường color: '#0f172a' cũ
+  brushColors: {
+    pen: '#0f172a',        // Màu đen xám cho bút bi
+    pencil: '#64748b',     // Màu chì cho bút chì
+    marker: '#eab308',     // Màu vàng cho bút highlight
+    calligraphy: '#be185d',// Màu hồng đậm cho bút thư pháp
+  },
+  brushSizes: {
+    pen: 4,
+    pencil: 2,
+    marker: 20,
+    calligraphy: 10,
+  },
   eraserSize: 20,
-  size: 4,
   opacity: 1,
 };
 
