@@ -1,60 +1,25 @@
-import {
-  collection,
-  addDoc,
-  getDocs,
-  doc,
-  deleteDoc,
-  updateDoc,
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  deleteDoc, 
+  setDoc, 
   getDoc,
-  setDoc,
-  serverTimestamp,
-  query,
-  orderBy,
+  serverTimestamp, 
+  query, 
+  orderBy 
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-// ===== HELPERS =====
-const safeString = (value) => (typeof value === 'string' ? value : '');
-
-const normalizeFlashcardPayload = (frontOrPayload, maybeBack) => {
-  // Hỗ trợ cả 2 kiểu:
-  // 1) addFlashcard(userId, packageId, front, back)
-  // 2) addFlashcard(userId, packageId, { front, back, frontData, backData })
-
-  if (
-    frontOrPayload &&
-    typeof frontOrPayload === 'object' &&
-    !Array.isArray(frontOrPayload)
-  ) {
-    return {
-      front: safeString(frontOrPayload.front),
-      back: safeString(frontOrPayload.back),
-      frontData: frontOrPayload.frontData ?? null,
-      backData: frontOrPayload.backData ?? null,
-    };
-  }
-
-  return {
-    front: safeString(frontOrPayload),
-    back: safeString(maybeBack),
-    frontData: null,
-    backData: null,
-  };
-};
-
-// ===== USER =====
+// ===== USER & AUTH =====
 export const saveUserToFirestore = async (userId, email) => {
   try {
     const userRef = doc(db, 'users', userId);
-    await setDoc(
-      userRef,
-      {
-        email,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    await setDoc(userRef, {
+      email,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
   } catch (error) {
     console.error('Lỗi lưu user:', error);
     throw error;
@@ -73,36 +38,15 @@ export const getUserInfo = async (userId) => {
 };
 
 // ===== PACKAGE =====
-export const addPackage = async (userId, name = '', description = '') => {
-  try {
-    const packagesRef = collection(db, 'users', userId, 'packages');
-    const docRef = await addDoc(packagesRef, {
-      name: name?.trim() || '',
-      description: description?.trim() || '',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    return docRef.id;
-  } catch (error) {
-    console.error('Lỗi thêm gói:', error);
-    throw error;
-  }
-};
-
 export const getPackages = async (userId) => {
   try {
     const packagesRef = collection(db, 'users', userId, 'packages');
     const q = query(packagesRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-
     const packages = [];
     querySnapshot.forEach((item) => {
-      packages.push({
-        id: item.id,
-        ...item.data(),
-      });
+      packages.push({ id: item.id, ...item.data() });
     });
-
     return packages;
   } catch (error) {
     console.error('Lỗi lấy packages:', error);
@@ -110,19 +54,31 @@ export const getPackages = async (userId) => {
   }
 };
 
-export const updatePackage = async (
-  userId,
-  packageId,
-  name = '',
-  description = ''
-) => {
+export const addPackage = async (userId, name = '', description = '') => {
+  try {
+    const packagesRef = collection(db, 'users', userId, 'packages');
+    const newPkgRef = doc(packagesRef); 
+    await setDoc(newPkgRef, {
+      name: name?.trim() || '',
+      description: description?.trim() || '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return newPkgRef.id;
+  } catch (error) {
+    console.error('Lỗi thêm gói:', error);
+    throw error;
+  }
+};
+
+export const updatePackage = async (userId, packageId, name = '', description = '') => {
   try {
     const packageRef = doc(db, 'users', userId, 'packages', packageId);
-    await updateDoc(packageRef, {
+    await setDoc(packageRef, {
       name: name?.trim() || '',
       description: description?.trim() || '',
       updatedAt: serverTimestamp(),
-    });
+    }, { merge: true });
   } catch (error) {
     console.error('Lỗi cập nhật gói:', error);
     throw error;
@@ -132,109 +88,62 @@ export const updatePackage = async (
 export const deletePackage = async (userId, packageId) => {
   try {
     const cardsRef = collection(db, 'users', userId, 'packages', packageId, 'cards');
-    const cardsSnapshot = await getDocs(cardsRef);
-
-    const deletePromises = [];
-    cardsSnapshot.forEach((item) => {
-      deletePromises.push(deleteDoc(item.ref));
-    });
+    const snapshot = await getDocs(cardsRef);
+    const deletePromises = snapshot.docs.map(item => deleteDoc(item.ref));
     await Promise.all(deletePromises);
-
-    const packageRef = doc(db, 'users', userId, 'packages', packageId);
-    await deleteDoc(packageRef);
+    await deleteDoc(doc(db, 'users', userId, 'packages', packageId));
   } catch (error) {
     console.error('Lỗi xóa gói:', error);
     throw error;
   }
 };
 
-// ===== FLASHCARD =====
-export const addFlashcard = async (userId, packageId, frontOrPayload, maybeBack) => {
+// ===== FLASHCARD (Hỗ trợ tách mặt thẻ & Lách giới hạn 1MB) =====
+
+// 1. Hàm lưu mặt thẻ đơn lẻ (Dùng setDoc để tự quản lý ID)
+export const saveCardSide = async (userId, packageId, sideDocId, data) => {
   try {
-    const { front, back, frontData, backData } = normalizeFlashcardPayload(
-      frontOrPayload,
-      maybeBack
-    );
-
-    const cardsRef = collection(db, 'users', userId, 'packages', packageId, 'cards');
-
-    const docRef = await addDoc(cardsRef, {
-      front,
-      back,
-      frontData,
-      backData,
-      createdAt: serverTimestamp(),
+    const cardRef = doc(db, 'users', userId, 'packages', packageId, 'cards', sideDocId);
+    await setDoc(cardRef, {
+      ...data,
       updatedAt: serverTimestamp(),
-    });
-
-    return docRef.id;
+    }, { merge: true });
   } catch (error) {
-    console.error('Lỗi thêm card:', error);
+    console.error('Lỗi lưu mặt thẻ:', error);
     throw error;
   }
 };
 
+// 2. Hàm lấy danh sách thẻ (Query gộp side)
 export const getFlashcards = async (userId, packageId) => {
   try {
     const cardsRef = collection(db, 'users', userId, 'packages', packageId, 'cards');
-    const q = query(cardsRef, orderBy('createdAt', 'desc'));
+    const q = query(cardsRef, orderBy('updatedAt', 'desc'));
     const querySnapshot = await getDocs(q);
-
-    const cards = [];
+    const docs = [];
     querySnapshot.forEach((item) => {
-      const data = item.data();
-
-      cards.push({
-        id: item.id,
-        ...data,
-        front: safeString(data.front),
-        back: safeString(data.back),
-        frontData: data.frontData ?? null,
-        backData: data.backData ?? null,
-      });
+      docs.push({ id: item.id, ...item.data() });
     });
-
-    return cards;
+    return docs; 
   } catch (error) {
     console.error('Lỗi lấy cards:', error);
     throw error;
   }
 };
 
-export const updateFlashcard = async (
-  userId,
-  packageId,
-  cardId,
-  frontOrPayload,
-  maybeBack
-) => {
+// 3. Hàm xóa cặp thẻ
+export const deleteFlashcardPair = async (userId, packageId, localId) => {
   try {
-    const { front, back, frontData, backData } = normalizeFlashcardPayload(
-      frontOrPayload,
-      maybeBack
-    );
-
-    const cardRef = doc(db, 'users', userId, 'packages', packageId, 'cards', cardId);
-
-    await updateDoc(cardRef, {
-      front,
-      back,
-      frontData,
-      backData,
-      updatedAt: serverTimestamp(),
-    });
+    const frontRef = doc(db, 'users', userId, 'packages', packageId, 'cards', `${localId}_front`);
+    const backRef = doc(db, 'users', userId, 'packages', packageId, 'cards', `${localId}_back`);
+    await Promise.all([deleteDoc(frontRef), deleteDoc(backRef)]);
   } catch (error) {
-    console.error('Lỗi cập nhật card:', error);
+    console.error('Lỗi xóa cặp thẻ:', error);
     throw error;
   }
 };
 
-export const deleteFlashcard = async (userId, packageId, cardId) => {
-  try {
-    const cardRef = doc(db, 'users', userId, 'packages', packageId, 'cards', cardId);
-    await deleteDoc(cardRef);
-  } catch (error) {
-    console.error('Lỗi xóa card:', error);
-    throw error;
-  }
-};
+// --- ALIASES (Để tương thích với code cũ không bị crash) ---
+export const addFlashcard = saveCardSide; 
+export const updateFlashcard = saveCardSide;
+export const deleteFlashcard = deleteFlashcardPair;

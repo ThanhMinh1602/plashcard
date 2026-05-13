@@ -493,9 +493,26 @@ const DrawingScreen = forwardRef(
           updateStatus();
         },
         toDataURL: () => {
-          redrawCanvas();
-          return canvasRef.current?.toDataURL('image/png') || '';
-        },
+    const canvas = canvasRef.current;
+    const historyCanvas = historyCanvasRef.current;
+    if (!canvas || !historyCanvas) return '';
+
+    // 1. Tạo canvas tạm thời
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+
+    // 2. Set tỉ lệ scale cho đồng bộ (tránh ảnh bị lệch trên iPad/Mac)
+    tempCtx.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
+
+    // 3. CHỈ vẽ historyCanvas (lớp chứa các nét vẽ) vào canvas tạm
+    // KHÔNG gọi drawPaperBackground ở đây
+    tempCtx.drawImage(historyCanvas, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+    
+    // 4. Trả về base64 dạng PNG trong suốt
+    return tempCanvas.toDataURL('image/png');
+  },
         getSceneData: () => serializeSceneData(historyRef.current),
         importImageFile: async (file) => {
           const canvas = canvasRef.current;

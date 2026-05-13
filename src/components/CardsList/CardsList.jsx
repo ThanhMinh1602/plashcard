@@ -14,6 +14,7 @@ import {
   deleteFlashcard,
   deletePackage,
   updatePackage,
+  saveCardSide,
 } from '../../services/flashcardService';
 
 import CardsEditorHeader from './CardsEditorHeader';
@@ -294,58 +295,45 @@ export default function CardsList({
   }, [user, packageItem?.id]);
 
   const loadCards = async () => {
-    if (!user || !packageItem?.id) return;
+  if (!user || !packageItem?.id) return;
 
-    try {
-      setLoading(true);
-      setError('');
+  try {
+    setLoading(true);
+    const rawDocs = await getFlashcards(user.uid, packageItem.id);
+    
+    // Logic gộp PairId
+    const pairsMap = {};
+    rawDocs.forEach(doc => {
+      const pId = doc.pairId;
+      if (!pId) return;
 
-      const userCards = await getFlashcards(user.uid, packageItem.id);
-
-      const sortedCards = [...userCards].sort((a, b) => {
-        const aTime =
-          a.createdAt?.toMillis?.() ||
-          a.createdAt?.seconds ||
-          a.createdAt ||
-          0;
-
-        const bTime =
-          b.createdAt?.toMillis?.() ||
-          b.createdAt?.seconds ||
-          b.createdAt ||
-          0;
-
-        return aTime - bTime;
-      });
-
-      const normalized = sortedCards.map((item) =>
-        createLocalCard({
-          localId: item.id,
-          id: item.id,
-          front: item.front,
-          back: item.back,
-          frontData: item.frontData || null,
-          backData: item.backData || null,
-        })
-      );
-
-      setCards(normalized);
-      markCardsSnapshotSaved(normalized);
-
-      if (normalized.length > 0) {
-        setCurrentEditId(normalized[0].localId);
-        setActiveCanvasKey(`${normalized[0].localId}-front`);
-      } else {
-        setCurrentEditId(null);
-        setActiveCanvasKey(null);
+      if (!pairsMap[pId]) {
+        pairsMap[pId] = { localId: pId, id: pId };
       }
-    } catch (err) {
-      console.error('Lỗi load cards:', err);
-      setError('Lỗi tải danh sách thẻ');
-    } finally {
-      setLoading(false);
+
+      if (doc.side === 'front') {
+        pairsMap[pId].front = doc.content;
+        pairsMap[pId].frontData = doc.canvasData;
+      } else {
+        pairsMap[pId].back = doc.content;
+        pairsMap[pId].backData = doc.canvasData;
+      }
+    });
+
+    const normalized = Object.values(pairsMap).map(p => createLocalCard(p));
+    setCards(normalized);
+    markCardsSnapshotSaved(normalized);
+
+    if (normalized.length > 0) {
+      setCurrentEditId(normalized[0].localId);
+      setActiveCanvasKey(`${normalized[0].localId}-front`);
     }
-  };
+  } catch (err) {
+    setError('Lỗi tải thẻ từ Cloud');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSwitchCard = (targetId) => {
     if (currentEditId === targetId) return;
@@ -457,121 +445,57 @@ export default function CardsList({
   };
 
   const saveAllCards = async ({ showMessage = true } = {}) => {
-    if (!user || !packageItem?.id) {
-      return false;
-    }
+  if (!user || !packageItem?.id || savingAll) return false;
 
-    if (savingAll) {
-      return false;
-    }
-
+  try {
+    setSavingAll(true);
     setError('');
-    setSaveMessage('');
 
-    if (!ensurePackageName('Bạn phải nhập tên gói trước khi lưu thẻ')) {
-      return false;
+    // Lưu thông tin package
+    await updatePackage(user.uid, packageItem.id, packageName, packageDescription);
+
+    const nextCards = [];
+    for (const item of cards) {
+      const isCurrent = item.localId === currentEditId;
+      const frontRef = isCurrent ? getCanvasRefByKey(`${item.localId}-front`) : null;
+      const backRef = isCurrent ? getCanvasRefByKey(`${item.localId}-back`) : null;
+
+      const fImg = isCurrent ? frontRef?.toDataURL?.() : item.front;
+      const fData = isCurrent ? frontRef?.getSceneData?.() : item.frontData;
+      const bImg = isCurrent ? backRef?.toDataURL?.() : item.back;
+      const bData = isCurrent ? backRef?.getSceneData?.() : item.backData;
+
+      // Lưu TÁCH BIỆT mặt trước và mặt sau
+      await Promise.all([
+        saveCardSide(user.uid, packageItem.id, `${item.localId}_front`, {
+          pairId: item.localId,
+          side: 'front',
+          content: fImg || '',
+          canvasData: fData || null,
+        }),
+        saveCardSide(user.uid, packageItem.id, `${item.localId}_back`, {
+          pairId: item.localId,
+          side: 'back',
+          content: bImg || '',
+          canvasData: bData || null,
+        })
+      ]);
+
+      nextCards.push({ ...item, front: fImg, frontData: fData, back: bImg, backData: bData });
     }
 
-    try {
-      setSavingAll(true);
-
-      const frontRef = currentEditId
-        ? getCanvasRefByKey(`${currentEditId}-front`)
-        : null;
-
-      const backRef = currentEditId
-        ? getCanvasRefByKey(`${currentEditId}-back`)
-        : null;
-
-      await updatePackage(
-        user.uid,
-        packageItem.id,
-        packageName,
-        packageDescription
-      );
-
-      syncSavedPackageSnapshot({
-        name: packageName,
-        description: packageDescription,
-      });
-
-      onPackageUpdated?.({
-        ...packageItem,
-        name: packageName,
-        description: packageDescription,
-      });
-
-      const nextCards = [];
-
-      for (const item of cards) {
-        const isCurrent = item.localId === currentEditId;
-
-        const frontDataStr = isCurrent
-          ? frontRef?.getSceneData?.() || item.frontData
-          : item.frontData;
-
-        const frontImgUrl = isCurrent
-          ? frontRef?.toDataURL?.() || item.front
-          : item.front;
-
-        const backDataStr = isCurrent
-          ? backRef?.getSceneData?.() || item.backData
-          : item.backData;
-
-        const backImgUrl = isCurrent
-          ? backRef?.toDataURL?.() || item.back
-          : item.back;
-
-        if (item.id) {
-          await updateFlashcard(user.uid, packageItem.id, item.id, {
-            front: frontImgUrl || '',
-            back: backImgUrl || '',
-            frontData: frontDataStr || null,
-            backData: backDataStr || null,
-          });
-
-          nextCards.push({
-            ...item,
-            front: frontImgUrl,
-            back: backImgUrl,
-            frontData: frontDataStr,
-            backData: backDataStr,
-          });
-        } else {
-          const newId = await addFlashcard(user.uid, packageItem.id, {
-            front: frontImgUrl || '',
-            back: backImgUrl || '',
-            frontData: frontDataStr || null,
-            backData: backDataStr || null,
-          });
-
-          nextCards.push({
-            ...item,
-            id: newId,
-            front: frontImgUrl,
-            back: backImgUrl,
-            frontData: frontDataStr,
-            backData: backDataStr,
-          });
-        }
-      }
-
-      setCards(nextCards);
-      markCardsSnapshotSaved(nextCards);
-
-      if (showMessage) {
-        setSaveMessage('Đã lưu toàn bộ thẻ');
-      }
-
-      return true;
-    } catch (err) {
-      console.error(err);
-      setError('Lỗi lưu thẻ');
-      return false;
-    } finally {
-      setSavingAll(false);
-    }
-  };
+    setCards(nextCards);
+    markCardsSnapshotSaved(nextCards);
+    if (showMessage) setSaveMessage('Đã lưu dữ liệu tối ưu (2MB/cặp)');
+    return true;
+  } catch (err) {
+    console.error(err);
+    setError('Lỗi lưu thẻ: Dung lượng vẫn vượt quá giới hạn cho phép');
+    return false;
+  } finally {
+    setSavingAll(false);
+  }
+};
 
   const waitForNextPaint = () =>
     new Promise((resolve) => {
