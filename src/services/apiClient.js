@@ -30,7 +30,10 @@ export async function apiRequest(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
-    body: options.body && typeof options.body !== 'string' ? JSON.stringify(options.body) : options.body,
+    body:
+      options.body && typeof options.body !== 'string'
+        ? JSON.stringify(options.body)
+        : options.body,
   });
 
   const json = await res.json().catch(() => ({}));

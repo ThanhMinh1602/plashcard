@@ -1,12 +1,12 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { FiMaximize2 } from 'react-icons/fi';
-import { Player } from '@lottiefiles/react-lottie-player';
-import savingLottie from '../../assets/lottie/sundance.json';
-import monkey1 from '../../assets/lottie/monkey1.json';
-import monkey2 from '../../assets/lottie/monkey2.json';
-import monkey3 from '../../assets/lottie/monkey3.json';
-import { motion, AnimatePresence } from 'motion/react';
-import ConfirmModal from '../Common/ConfirmModal';
+import React, { useEffect, useState, useRef } from "react";
+import { FiMaximize2 } from "react-icons/fi";
+import { Player } from "@lottiefiles/react-lottie-player";
+import savingLottie from "../../assets/lottie/sundance.json";
+import monkey1 from "../../assets/lottie/monkey1.json";
+import monkey2 from "../../assets/lottie/monkey2.json";
+import monkey3 from "../../assets/lottie/monkey3.json";
+import { motion, AnimatePresence } from "motion/react";
+import ConfirmModal from "../Common/ConfirmModal";
 import {
   getFlashcards,
   addFlashcard,
@@ -16,20 +16,21 @@ import {
   updatePackage,
   updatePackageBackground,
   saveCardSide,
-} from '../../services/flashcardService';
+  bulkSaveCards,
+} from "../../services/flashcardService";
 
-import CardsEditorHeader from './CardsEditorHeader';
-import CardsEditorToolbar from './CardsEditorToolbar';
-import CardsEmptyState from './CardsEmptyState';
-import FlashcardPairItem from './FlashcardPairItem';
-import { DEFAULT_TOOLBOX, createLocalCard, cn } from './constants';
+import CardsEditorHeader from "./CardsEditorHeader";
+import CardsEditorToolbar from "./CardsEditorToolbar";
+import CardsEmptyState from "./CardsEmptyState";
+import FlashcardPairItem from "./FlashcardPairItem";
+import { DEFAULT_TOOLBOX, createLocalCard, cn } from "./constants";
 import {
   DEFAULT_CARD_BACKGROUND_PAIR_ID,
   getCardBackgroundPair,
-} from '../../utils/cardBackgrounds';
-import usePackageEditor from './hooks/usePackageEditor';
-import useCanvasRegistry from './hooks/useCanvasRegistry';
-import usePenPress from './hooks/usePenPress';
+} from "../../utils/cardBackgrounds";
+import usePackageEditor from "./hooks/usePackageEditor";
+import useCanvasRegistry from "./hooks/useCanvasRegistry";
+import usePenPress from "./hooks/usePenPress";
 
 export default function CardsList({
   user,
@@ -44,15 +45,15 @@ export default function CardsList({
   const [loading, setLoading] = useState(true);
   const [savingAll, setSavingAll] = useState(false);
   const [isBackSaving, setIsBackSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [saveMessage, setSaveMessage] = useState('');
+  const [error, setError] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isDeletingCard, setIsDeletingCard] = useState(false);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [backConfirmMonkeyIndex, setBackConfirmMonkeyIndex] = useState(0);
   const [toolbox, setToolbox] = useState(DEFAULT_TOOLBOX);
   const [packageBackgroundPairId, setPackageBackgroundPairId] = useState(
-    packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID
+    packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
   );
 
   const [currentEditId, setCurrentEditId] = useState(null);
@@ -128,13 +129,55 @@ export default function CardsList({
 
   useEffect(() => {
     setPackageBackgroundPairId(
-      packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID
+      packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
     );
   }, [packageItem?.id, packageItem?.backgroundPairId]);
+  const getDraftStorageKey = () => {
+    if (!user?.uid || !packageItem?.id) return null;
+    return `plashcard_draft_${user.uid}_${packageItem.id}`;
+  };
 
+  const saveDraftToLocal = (nextCards, extra = {}) => {
+    const key = getDraftStorageKey();
+    if (!key) return;
+
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          cards: nextCards,
+          packageBackgroundPairId,
+          currentEditId,
+          updatedAt: Date.now(),
+          ...extra,
+        }),
+      );
+    } catch (err) {
+      console.warn("Cannot save draft to localStorage:", err);
+    }
+  };
+
+  const getDraftFromLocal = () => {
+    const key = getDraftStorageKey();
+    if (!key) return null;
+
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const clearDraftLocal = () => {
+    const key = getDraftStorageKey();
+    if (!key) return;
+
+    localStorage.removeItem(key);
+  };
   const normalizeSnapshotValue = (value) => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'string') return value;
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
 
     try {
       return JSON.stringify(value);
@@ -148,14 +191,10 @@ export default function CardsList({
       id: card.id || null,
       front: normalizeSnapshotValue(override.front ?? card.front),
       back: normalizeSnapshotValue(override.back ?? card.back),
-      frontData: normalizeSnapshotValue(
-        override.frontData ?? card.frontData
-      ),
-      backData: normalizeSnapshotValue(
-        override.backData ?? card.backData
-      ),
+      frontData: normalizeSnapshotValue(override.frontData ?? card.frontData),
+      backData: normalizeSnapshotValue(override.backData ?? card.backData),
       backgroundPairId: normalizeSnapshotValue(
-        override.backgroundPairId ?? card.backgroundPairId
+        override.backgroundPairId ?? card.backgroundPairId,
       ),
     };
   };
@@ -167,7 +206,7 @@ export default function CardsList({
       card.back ||
       card.frontData ||
       card.backData ||
-      card.backgroundPairId !== DEFAULT_CARD_BACKGROUND_PAIR_ID
+      card.backgroundPairId !== DEFAULT_CARD_BACKGROUND_PAIR_ID,
     );
   };
 
@@ -213,17 +252,94 @@ export default function CardsList({
     if (!cardId) return;
 
     savedCardsSnapshotRef.current = savedCardsSnapshotRef.current.filter(
-      (card) => card.id !== cardId
+      (card) => card.id !== cardId,
     );
   };
 
-  const hasUnsavedCardChanges = (currentSnapshot = getCurrentCardsSnapshot()) => {
+  const hasUnsavedCardChanges = (
+    currentSnapshot = getCurrentCardsSnapshot(),
+  ) => {
     return (
       JSON.stringify(currentSnapshot) !==
       JSON.stringify(savedCardsSnapshotRef.current)
     );
   };
+  const getCardsWithCurrentCanvasData = () => {
+    return (cards || []).map((item) => {
+      const isCurrent = item.localId === currentEditId;
 
+      if (!isCurrent) {
+        return {
+          ...item,
+          backgroundPairId:
+            packageBackgroundPairId ||
+            item.backgroundPairId ||
+            DEFAULT_CARD_BACKGROUND_PAIR_ID,
+        };
+      }
+
+      const frontRef = getCanvasRefByKey(`${item.localId}-front`);
+      const backRef = getCanvasRefByKey(`${item.localId}-back`);
+
+      const frontImg = frontRef?.toDataURL?.() || item.front || "";
+      const frontData = frontRef?.getSceneData?.() || item.frontData || null;
+
+      const backImg = backRef?.toDataURL?.() || item.back || "";
+      const backData = backRef?.getSceneData?.() || item.backData || null;
+
+      return {
+        ...item,
+        front: frontImg,
+        frontData,
+        back: backImg,
+        backData,
+        backgroundPairId:
+          packageBackgroundPairId ||
+          item.backgroundPairId ||
+          DEFAULT_CARD_BACKGROUND_PAIR_ID,
+      };
+    });
+  };
+
+  const getChangedCards = (nextCards) => {
+    const savedMap = new Map(
+      savedCardsSnapshotRef.current.map((item) => [item.id, item]),
+    );
+
+    return nextCards.filter((card) => {
+      const comparableCard = createComparableCard(card);
+      const savedCard = savedMap.get(comparableCard.id);
+
+      if (!savedCard) return true;
+
+      return JSON.stringify(comparableCard) !== JSON.stringify(savedCard);
+    });
+  };
+
+  const toBulkCardPayload = (card) => {
+    const backgroundPairId =
+      card.backgroundPairId ||
+      packageBackgroundPairId ||
+      DEFAULT_CARD_BACKGROUND_PAIR_ID;
+
+    return {
+      localId: card.localId,
+      front: {
+        pairId: card.localId,
+        side: "front",
+        content: card.front || "",
+        canvasData: card.frontData || null,
+        backgroundPairId,
+      },
+      back: {
+        pairId: card.localId,
+        side: "back",
+        content: card.back || "",
+        canvasData: card.backData || null,
+        backgroundPairId,
+      },
+    };
+  };
   const saveCurrentActiveCardData = () => {
     if (!currentEditId) return;
 
@@ -250,21 +366,21 @@ export default function CardsList({
         }
 
         return card;
-      })
+      }),
     );
   };
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
 
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
 
     const preventNativeScroll = (e) => {
       const target = e.target;
 
       if (
         target.closest?.(
-          'button,input,textarea,select,label,[data-allow-touch]'
+          "button,input,textarea,select,label,[data-allow-touch]",
         )
       ) {
         return;
@@ -280,13 +396,13 @@ export default function CardsList({
       e.preventDefault();
     };
 
-    document.addEventListener('touchmove', preventNativeScroll, {
+    document.addEventListener("touchmove", preventNativeScroll, {
       passive: false,
     });
 
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener('touchmove', preventNativeScroll);
+      document.removeEventListener("touchmove", preventNativeScroll);
     };
   }, []);
 
@@ -301,10 +417,10 @@ export default function CardsList({
       }
     };
 
-    list.addEventListener('wheel', handleWheel, { passive: false });
+    list.addEventListener("wheel", handleWheel, { passive: false });
 
     return () => {
-      list.removeEventListener('wheel', handleWheel);
+      list.removeEventListener("wheel", handleWheel);
     };
   }, [cards.length]);
 
@@ -313,79 +429,151 @@ export default function CardsList({
   }, [user, packageItem?.id]);
 
   const loadCards = async () => {
-  if (!user || !packageItem?.id) return;
+    if (!user || !packageItem?.id) return;
 
-  try {
-    setLoading(true);
-    const rawDocs = await getFlashcards(user.uid, packageItem.id);
-    
-    // Logic gộp PairId
-    const pairsMap = {};
-    rawDocs.forEach(doc => {
-      const pId = doc.pairId;
-      if (!pId) return;
+    try {
+      setLoading(true);
 
-      if (!pairsMap[pId]) {
-        pairsMap[pId] = { localId: pId, id: pId };
+      const rawDocs = await getFlashcards(user.uid, packageItem.id);
+
+      // Logic gộp PairId
+      const pairsMap = {};
+
+      rawDocs.forEach((doc) => {
+        const pId = doc.pairId;
+        if (!pId) return;
+
+        if (!pairsMap[pId]) {
+          pairsMap[pId] = {
+            localId: pId,
+            id: pId,
+          };
+        }
+
+        if (doc.side === "front") {
+          pairsMap[pId].front = doc.content;
+          pairsMap[pId].frontData = doc.canvasData;
+        } else {
+          pairsMap[pId].back = doc.content;
+          pairsMap[pId].backData = doc.canvasData;
+        }
+
+        if (doc.backgroundPairId) {
+          pairsMap[pId].backgroundPairId = doc.backgroundPairId;
+        }
+      });
+
+      const normalized = Object.values(pairsMap).map((p) => createLocalCard(p));
+      const localDraft = getDraftFromLocal();
+
+      let finalCards = normalized;
+      let finalCurrentEditId = normalized[0]?.localId || null;
+
+      if (localDraft?.cards?.length > 0) {
+        finalCards = localDraft.cards.map((item) => createLocalCard(item));
+        finalCurrentEditId =
+          localDraft.currentEditId || finalCards[0]?.localId || null;
+
+        if (localDraft.packageBackgroundPairId) {
+          setPackageBackgroundPairId(localDraft.packageBackgroundPairId);
+        }
+
+        setSaveMessage("Đã khôi phục bản nháp chưa lưu trên máy");
+      } else if (
+        !packageItem?.backgroundPairId &&
+        normalized[0]?.backgroundPairId
+      ) {
+        setPackageBackgroundPairId(normalized[0].backgroundPairId);
       }
 
-      if (doc.side === 'front') {
-        pairsMap[pId].front = doc.content;
-        pairsMap[pId].frontData = doc.canvasData;
+      setCards(finalCards);
+
+      if (localDraft?.cards?.length > 0) {
+        savedCardsSnapshotRef.current = buildSavedCardsSnapshot(normalized);
       } else {
-        pairsMap[pId].back = doc.content;
-        pairsMap[pId].backData = doc.canvasData;
+        markCardsSnapshotSaved(finalCards);
       }
 
-      if (doc.backgroundPairId) {
-        pairsMap[pId].backgroundPairId = doc.backgroundPairId;
+      if (finalCurrentEditId) {
+        setCurrentEditId(finalCurrentEditId);
+        setActiveCanvasKey(`${finalCurrentEditId}-front`);
       }
-    });
-
-    const normalized = Object.values(pairsMap).map(p => createLocalCard(p));
-    if (!packageItem?.backgroundPairId && normalized[0]?.backgroundPairId) {
-      setPackageBackgroundPairId(normalized[0].backgroundPairId);
+    } catch (err) {
+      setError("Lỗi tải thẻ từ Cloud");
+    } finally {
+      setLoading(false);
     }
-    setCards(normalized);
-    markCardsSnapshotSaved(normalized);
-
-    if (normalized.length > 0) {
-      setCurrentEditId(normalized[0].localId);
-      setActiveCanvasKey(`${normalized[0].localId}-front`);
-    }
-  } catch (err) {
-    setError('Lỗi tải thẻ từ Cloud');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleSwitchCard = (targetId) => {
     if (currentEditId === targetId) return;
 
-    saveCurrentActiveCardData();
+    const nextCards = getCardsWithCurrentCanvasData();
+
+    setCards(nextCards);
+    saveDraftToLocal(nextCards);
 
     resetCardTransform();
-
     setCurrentEditId(targetId);
     setActiveCanvasKey(`${targetId}-front`);
   };
 
   const handleAddCardPair = () => {
-    setError('');
-    setSaveMessage('');
+    setError("");
+    setSaveMessage("");
 
-    if (!ensurePackageName('Bạn phải nhập tên gói trước khi thêm thẻ')) {
+    if (!ensurePackageName("Bạn phải nhập tên gói trước khi thêm thẻ")) {
       return;
     }
 
-    saveCurrentActiveCardData();
+    const nextCardsBeforeAdd = getCardsWithCurrentCanvasData();
+    const changedCards = getChangedCards(nextCardsBeforeAdd);
+
+    setCards(nextCardsBeforeAdd);
+    saveDraftToLocal(nextCardsBeforeAdd);
+
+    if (changedCards.length > 0 && user?.uid && packageItem?.id) {
+      const currentChangedCard = changedCards.find(
+        (item) => item.localId === currentEditId,
+      );
+
+      if (currentChangedCard) {
+        bulkSaveCards(user.uid, packageItem.id, [
+          toBulkCardPayload(currentChangedCard),
+        ])
+          .then(() => {
+            savedCardsSnapshotRef.current =
+              savedCardsSnapshotRef.current.filter(
+                (item) => item.id !== currentChangedCard.id,
+              );
+
+            savedCardsSnapshotRef.current.push(
+              createComparableCard(currentChangedCard),
+            );
+          })
+          .catch((err) => {
+            console.error(err);
+            setError(
+              "Thẻ vừa rồi chưa lưu lên server, nhưng bản nháp đã được giữ trên máy",
+            );
+          });
+      }
+    }
 
     resetCardTransform();
 
     const newCard = createLocalCard();
 
-    setCards((prev) => [...prev, newCard]);
+    setCards((prev) => {
+      const next = [...prev, newCard];
+
+      saveDraftToLocal(next, {
+        currentEditId: newCard.localId,
+      });
+
+      return next;
+    });
+
     setCurrentEditId(newCard.localId);
     setActiveCanvasKey(`${newCard.localId}-front`);
 
@@ -393,7 +581,7 @@ export default function CardsList({
       if (thumbnailListRef.current) {
         thumbnailListRef.current.scrollTo({
           left: thumbnailListRef.current.scrollWidth,
-          behavior: 'smooth',
+          behavior: "smooth",
         });
       }
     }, 100);
@@ -404,9 +592,20 @@ export default function CardsList({
   };
 
   const handleBackgroundPairChange = async (backgroundPairId) => {
-    setError('');
-    setSaveMessage('');
+    setError("");
+    setSaveMessage("");
     setPackageBackgroundPairId(backgroundPairId);
+
+    const nextCards = cards.map((card) => ({
+      ...card,
+      backgroundPairId,
+    }));
+
+    setCards(nextCards);
+    saveDraftToLocal(nextCards, {
+      packageBackgroundPairId: backgroundPairId,
+    });
+
     onPackageUpdated?.({
       ...packageItem,
       backgroundPairId,
@@ -416,10 +615,10 @@ export default function CardsList({
 
     try {
       await updatePackageBackground(user.uid, packageItem.id, backgroundPairId);
-      setSaveMessage('Đã lưu nền thành công');
+      setSaveMessage("Đã lưu nền thành công");
     } catch (err) {
       console.error(err);
-      setError('Lỗi lưu nền chung của gói');
+      setError("Lỗi lưu nền chung của gói");
     }
   };
 
@@ -448,6 +647,7 @@ export default function CardsList({
       const nextCards = cards.filter((item) => item.localId !== localId);
 
       setCards(nextCards);
+      saveDraftToLocal(nextCards);
 
       if (currentEditId === localId) {
         if (nextCards.length > 0) {
@@ -463,7 +663,7 @@ export default function CardsList({
       setDeleteTargetId(null);
     } catch (err) {
       console.error(err);
-      alert('Lỗi xóa thẻ');
+      alert("Lỗi xóa thẻ");
     } finally {
       setIsDeletingCard(false);
     }
@@ -471,11 +671,11 @@ export default function CardsList({
 
   const handleImportClick = () => {
     if (!activeCanvasRef) {
-      setError('Hãy chạm vào một mặt thẻ trước khi import ảnh');
+      setError("Hãy chạm vào một mặt thẻ trước khi import ảnh");
       return;
     }
 
-    document.getElementById('cards-import-input')?.click();
+    document.getElementById("cards-import-input")?.click();
   };
 
   const handleImportChange = async (e) => {
@@ -485,78 +685,73 @@ export default function CardsList({
     try {
       await activeCanvasRef?.importImageFile?.(file);
     } finally {
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
   const saveAllCards = async ({ showMessage = true } = {}) => {
-  if (!user || !packageItem?.id || savingAll) return false;
+    if (!user || !packageItem?.id || savingAll) return false;
 
-  try {
-    setSavingAll(true);
-    setError('');
+    try {
+      setSavingAll(true);
+      setError("");
+      setSaveMessage("");
 
-    // Lưu thông tin package
-    await updatePackage(user.uid, packageItem.id, packageName, packageDescription);
-    await updatePackageBackground(
-      user.uid,
-      packageItem.id,
-      packageBackgroundPairId
-    );
+      const nextCards = getCardsWithCurrentCanvasData();
 
-    const nextCards = [];
-    for (const item of cards) {
-      const isCurrent = item.localId === currentEditId;
-      const frontRef = isCurrent ? getCanvasRefByKey(`${item.localId}-front`) : null;
-      const backRef = isCurrent ? getCanvasRefByKey(`${item.localId}-back`) : null;
+      saveDraftToLocal(nextCards);
 
-      const fImg = isCurrent ? frontRef?.toDataURL?.() : item.front;
-      const fData = isCurrent ? frontRef?.getSceneData?.() : item.frontData;
-      const bImg = isCurrent ? backRef?.toDataURL?.() : item.back;
-      const bData = isCurrent ? backRef?.getSceneData?.() : item.backData;
-      const backgroundPairId =
-        packageBackgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID;
+      await updatePackage(
+        user.uid,
+        packageItem.id,
+        packageName,
+        packageDescription,
+      );
+      await updatePackageBackground(
+        user.uid,
+        packageItem.id,
+        packageBackgroundPairId,
+      );
 
-      // Lưu TÁCH BIỆT mặt trước và mặt sau
-      await Promise.all([
-        saveCardSide(user.uid, packageItem.id, `${item.localId}_front`, {
-          pairId: item.localId,
-          side: 'front',
-          content: fImg || '',
-          canvasData: fData || null,
-          backgroundPairId,
-        }),
-        saveCardSide(user.uid, packageItem.id, `${item.localId}_back`, {
-          pairId: item.localId,
-          side: 'back',
-          content: bImg || '',
-          canvasData: bData || null,
-          backgroundPairId,
-        })
-      ]);
+      const changedCards = getChangedCards(nextCards);
 
-      nextCards.push({
-        ...item,
-        front: fImg,
-        frontData: fData,
-        back: bImg,
-        backData: bData,
-        backgroundPairId,
-      });
+      if (changedCards.length === 0) {
+        setCards(nextCards);
+        markCardsSnapshotSaved(nextCards);
+        clearDraftLocal();
+
+        if (showMessage) {
+          setSaveMessage("Không có thay đổi mới cần lưu");
+        }
+
+        return true;
+      }
+
+      await bulkSaveCards(
+        user.uid,
+        packageItem.id,
+        changedCards.map(toBulkCardPayload),
+      );
+
+      setCards(nextCards);
+      markCardsSnapshotSaved(nextCards);
+      clearDraftLocal();
+
+      if (showMessage) {
+        setSaveMessage(`Đã lưu ${changedCards.length} thẻ thay đổi`);
+      }
+
+      return true;
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Lỗi lưu thẻ. Bản nháp vẫn được giữ trên máy để tránh mất dữ liệu",
+      );
+      return false;
+    } finally {
+      setSavingAll(false);
     }
-
-    setCards(nextCards);
-    markCardsSnapshotSaved(nextCards);
-    if (showMessage) setSaveMessage('Đã lưu dữ liệu tối ưu (2MB/cặp)');
-    return true;
-  } catch (err) {
-    console.error(err);
-    setError('Lỗi lưu thẻ: Dung lượng vẫn vượt quá giới hạn cho phép');
-    return false;
-  } finally {
-    setSavingAll(false);
-  }
-};
+  };
 
   const waitForNextPaint = () =>
     new Promise((resolve) => {
@@ -592,7 +787,7 @@ export default function CardsList({
         onBack?.();
       } catch (err) {
         console.error(err);
-        setError('Lỗi thoát gói rỗng');
+        setError("Lỗi thoát gói rỗng");
       }
 
       return;
@@ -604,8 +799,7 @@ export default function CardsList({
     }
 
     const nextMonkeyIndex =
-      (backConfirmMonkeyIndexRef.current + 1) %
-      BACK_CONFIRM_MONKEY_LIST.length;
+      (backConfirmMonkeyIndexRef.current + 1) % BACK_CONFIRM_MONKEY_LIST.length;
 
     backConfirmMonkeyIndexRef.current = nextMonkeyIndex;
     setBackConfirmMonkeyIndex(nextMonkeyIndex);
@@ -683,7 +877,7 @@ export default function CardsList({
   };
 
   const handleCardPointerDownCapture = (e) => {
-    if (e.pointerType !== 'touch') return;
+    if (e.pointerType !== "touch") return;
 
     touchPointersRef.current.set(e.pointerId, {
       x: e.clientX,
@@ -700,7 +894,7 @@ export default function CardsList({
   };
 
   const handleCardPointerMoveCapture = (e) => {
-    if (e.pointerType !== 'touch') return;
+    if (e.pointerType !== "touch") return;
 
     if (!touchPointersRef.current.has(e.pointerId)) return;
 
@@ -728,7 +922,7 @@ export default function CardsList({
     const gesture = pinchGestureRef.current;
 
     const nextZoom = clampCardZoom(
-      gesture.startZoom * (metrics.distance / gesture.startDistance)
+      gesture.startZoom * (metrics.distance / gesture.startDistance),
     );
 
     const localMidpoint = {
@@ -747,7 +941,7 @@ export default function CardsList({
   };
 
   const handleCardPointerEndCapture = (e) => {
-    if (e.pointerType !== 'touch') return;
+    if (e.pointerType !== "touch") return;
 
     touchPointersRef.current.delete(e.pointerId);
     e.currentTarget.releasePointerCapture?.(e.pointerId);
@@ -778,22 +972,20 @@ export default function CardsList({
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm">
-        <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]">
-          <div className="mb-4 h-32 w-32">
+      <div className='fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm'>
+        <div className='mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]'>
+          <div className='mb-4 h-32 w-32'>
             <Player
               autoplay
               loop
               src={savingLottie}
-              className="h-full w-full"
+              className='h-full w-full'
             />
           </div>
 
-          <h3 className="text-lg font-black text-slate-800">
-            Đang tải thẻ...
-          </h3>
+          <h3 className='text-lg font-black text-slate-800'>Đang tải thẻ...</h3>
 
-          <p className="mt-2 text-sm leading-6 text-slate-500">
+          <p className='mt-2 text-sm leading-6 text-slate-500'>
             Hệ thống đang chuẩn bị dữ liệu và nền thẻ cho bộ này.
           </p>
         </div>
@@ -804,19 +996,19 @@ export default function CardsList({
   return (
     <>
       <input
-        id="cards-import-input"
-        type="file"
-        accept="image/*"
-        className="hidden"
+        id='cards-import-input'
+        type='file'
+        accept='image/*'
+        className='hidden'
         onChange={handleImportChange}
       />
 
-      <div className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]">
+      <div className='flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]'>
         <div
-          className="z-40 w-full shrink-0 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl"
-          style={{ touchAction: 'manipulation' }}
+          className='z-40 w-full shrink-0 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl'
+          style={{ touchAction: "manipulation" }}
         >
-          <div className="mx-auto w-full max-w-[1500px]">
+          <div className='mx-auto w-full max-w-[1500px]'>
             <CardsEditorHeader
               onBack={handleBackClick}
               isEditingName={isEditingName}
@@ -838,7 +1030,7 @@ export default function CardsList({
               saveMessage={saveMessage}
             />
 
-            <div className="px-3 pb-3 sm:px-5 lg:px-8">
+            <div className='px-3 pb-3 sm:px-5 lg:px-8'>
               <CardsEditorToolbar
                 activeCanvasRef={activeCanvasRef}
                 activeStatus={activeStatus}
@@ -853,67 +1045,67 @@ export default function CardsList({
         </div>
 
         {cards.length > 0 && (
-          <div className="z-30 w-full shrink-0 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-md">
+          <div className='z-30 w-full shrink-0 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-md'>
             <div
               ref={thumbnailListRef}
-              className="hide-scrollbar flex w-full items-center gap-4 overflow-x-auto px-6 py-3"
-              style={{ touchAction: 'pan-x' }}
+              className='hide-scrollbar flex w-full items-center gap-4 overflow-x-auto px-6 py-3'
+              style={{ touchAction: "pan-x" }}
               data-allow-touch
             >
               {cards.map((item) => {
                 const isActive = item.localId === currentEditId;
                 const backgroundPair = getCardBackgroundPair(
-                  packageBackgroundPairId || item.backgroundPairId
+                  packageBackgroundPairId || item.backgroundPairId,
                 );
 
                 return (
                   <button
                     key={item.localId}
-                    type="button"
+                    type='button'
                     {...bindPress(() => handleSwitchCard(item.localId))}
                     className={cn(
-                      'group relative flex shrink-0 cursor-pointer flex-col items-center gap-2 transition-all duration-300 ease-out',
+                      "group relative flex shrink-0 cursor-pointer flex-col items-center gap-2 transition-all duration-300 ease-out",
                       isActive
-                        ? 'scale-110 opacity-100'
-                        : 'scale-100 opacity-50 hover:scale-105 hover:opacity-100'
+                        ? "scale-110 opacity-100"
+                        : "scale-100 opacity-50 hover:scale-105 hover:opacity-100",
                     )}
                   >
                     <div
                       className={cn(
-                        'flex h-16 w-[100px] overflow-hidden rounded-xl border-2 bg-white shadow-sm transition-colors duration-300',
+                        "flex h-16 w-[100px] overflow-hidden rounded-xl border-2 bg-white shadow-sm transition-colors duration-300",
                         isActive
-                          ? 'border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.4)]'
-                          : 'border-slate-200'
+                          ? "border-sky-400 shadow-[0_0_15px_rgba(56,189,248,0.4)]"
+                          : "border-slate-200",
                       )}
                     >
-                      <div className="relative h-full w-1/2 border-r border-slate-100 bg-sky-50/30">
+                      <div className='relative h-full w-1/2 border-r border-slate-100 bg-sky-50/30'>
                         <img
                           src={backgroundPair.front}
-                          alt=""
-                          aria-hidden="true"
-                          className="absolute inset-0 h-full w-full object-cover"
+                          alt=''
+                          aria-hidden='true'
+                          className='absolute inset-0 h-full w-full object-cover'
                         />
                         {item.front && (
                           <img
                             src={item.front}
-                            alt="F"
-                            className="absolute inset-0 h-full w-full object-cover"
+                            alt='F'
+                            className='absolute inset-0 h-full w-full object-cover'
                           />
                         )}
                       </div>
 
-                      <div className="relative h-full w-1/2 bg-pink-50/30">
+                      <div className='relative h-full w-1/2 bg-pink-50/30'>
                         <img
                           src={backgroundPair.back}
-                          alt=""
-                          aria-hidden="true"
-                          className="absolute inset-0 h-full w-full object-cover"
+                          alt=''
+                          aria-hidden='true'
+                          className='absolute inset-0 h-full w-full object-cover'
                         />
                         {item.back && (
                           <img
                             src={item.back}
-                            alt="B"
-                            className="absolute inset-0 h-full w-full object-cover"
+                            alt='B'
+                            className='absolute inset-0 h-full w-full object-cover'
                           />
                         )}
                       </div>
@@ -923,14 +1115,14 @@ export default function CardsList({
               })}
 
               <button
-                type="button"
+                type='button'
                 disabled={!canAddCard}
                 {...bindPress(handleAddCardPair, !canAddCard)}
                 className={cn(
-                  'flex h-16 w-[100px] shrink-0 items-center justify-center rounded-xl border-2 border-dashed bg-white/50 transition',
+                  "flex h-16 w-[100px] shrink-0 items-center justify-center rounded-xl border-2 border-dashed bg-white/50 transition",
                   canAddCard
-                    ? 'border-slate-300 text-slate-400 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-500'
-                    : 'cursor-not-allowed border-slate-200 text-slate-300'
+                    ? "border-slate-300 text-slate-400 hover:border-sky-400 hover:bg-sky-50 hover:text-sky-500"
+                    : "cursor-not-allowed border-slate-200 text-slate-300",
                 )}
               >
                 +
@@ -941,17 +1133,17 @@ export default function CardsList({
 
         <div
           className={cn(
-            'relative flex w-full flex-1 justify-center overflow-hidden px-4 lg:px-8',
+            "relative flex w-full flex-1 justify-center overflow-hidden px-4 lg:px-8",
             cards.length === 0
-              ? 'items-center py-4'
-              : 'items-start pt-4 pb-4 lg:pt-6'
+              ? "items-center py-4"
+              : "items-start pt-4 pb-4 lg:pt-6",
           )}
-          style={{ touchAction: 'none' }}
+          style={{ touchAction: "none" }}
         >
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode='wait'>
             {cards.length === 0 ? (
               <motion.div
-                key="empty-state"
+                key='empty-state'
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
@@ -966,12 +1158,12 @@ export default function CardsList({
               currentCard && (
                 <motion.div
                   key={currentEditId}
-                  className="w-[850px] max-w-full origin-top"
+                  className='w-[850px] max-w-full origin-top'
                   initial={{ opacity: 0, scale: 0.1, y: -120 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.1, y: -120 }}
                   transition={{
-                    type: 'spring',
+                    type: "spring",
                     stiffness: 350,
                     damping: 30,
                     mass: 0.8,
@@ -979,24 +1171,24 @@ export default function CardsList({
                 >
                   <div
                     ref={cardGestureAreaRef}
-                    className="relative"
-                    style={{ touchAction: 'none' }}
+                    className='relative'
+                    style={{ touchAction: "none" }}
                     onPointerDownCapture={handleCardPointerDownCapture}
                     onPointerMoveCapture={handleCardPointerMoveCapture}
                     onPointerUpCapture={handleCardPointerEndCapture}
                     onPointerCancelCapture={handleCardPointerEndCapture}
                   >
                     <div
-                      className="origin-top-left will-change-transform"
+                      className='origin-top-left will-change-transform'
                       style={{
                         transform: `translate3d(${cardTransform.x}px, ${cardTransform.y}px, 0) scale(${cardTransform.zoom})`,
-                        transformOrigin: '0 0',
+                        transformOrigin: "0 0",
                       }}
                     >
                       <FlashcardPairItem
                         item={currentCard}
                         index={cards.findIndex(
-                          (c) => c.localId === currentEditId
+                          (c) => c.localId === currentEditId,
                         )}
                         activeCanvasKey={activeCanvasKey}
                         setActiveCanvasKey={setActiveCanvasKey}
@@ -1020,14 +1212,14 @@ export default function CardsList({
 
           {cards.length > 0 && (
             <button
-              type="button"
+              type='button'
               {...bindPress(resetCardTransform)}
               onPointerDownCapture={(e) => e.stopPropagation()}
               onPointerMoveCapture={(e) => e.stopPropagation()}
               onPointerUpCapture={(e) => e.stopPropagation()}
               data-allow-touch
-              className="absolute right-4 top-4 z-50 inline-flex h-8 items-center gap-1.5 rounded-full border border-white/70 bg-white/65 px-2.5 text-[10px] font-black text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition hover:bg-white hover:text-slate-900"
-              title="Trở về kích thước ban đầu"
+              className='absolute right-4 top-4 z-50 inline-flex h-8 items-center gap-1.5 rounded-full border border-white/70 bg-white/65 px-2.5 text-[10px] font-black text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition hover:bg-white hover:text-slate-900'
+              title='Trở về kích thước ban đầu'
             >
               <FiMaximize2 size={13} />
               <span>{Math.round(cardTransform.zoom * 100)}%</span>
@@ -1037,22 +1229,22 @@ export default function CardsList({
       </div>
 
       {isBackSaving && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm">
-          <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]">
-            <div className="mb-4 h-32 w-32">
+        <div className='fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm'>
+          <div className='mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]'>
+            <div className='mb-4 h-32 w-32'>
               <Player
                 autoplay
                 loop
                 src={savingLottie}
-                className="h-full w-full"
+                className='h-full w-full'
               />
             </div>
 
-            <h3 className="text-lg font-black text-slate-800">
+            <h3 className='text-lg font-black text-slate-800'>
               Đang lưu thẻ...
             </h3>
 
-            <p className="mt-2 text-sm leading-6 text-slate-500">
+            <p className='mt-2 text-sm leading-6 text-slate-500'>
               Vui lòng không thoát ứng dụng trong lúc hệ thống đang lưu dữ liệu.
             </p>
           </div>
@@ -1061,25 +1253,25 @@ export default function CardsList({
 
       <ConfirmModal
         open={showBackConfirm}
-        title="Thoát mà không lưu?"
-        message="Mất hết ráng chịu nha! :))"
-        confirmText="Thoát không lưu"
-        cancelText="Ở lại"
-        variant="warning"
+        title='Thoát mà không lưu?'
+        message='Mất hết ráng chịu nha! :))'
+        confirmText='Thoát không lưu'
+        cancelText='Ở lại'
+        variant='warning'
         loading={false}
         lottieSrc={BACK_CONFIRM_MONKEY_LIST[backConfirmMonkeyIndex]}
-        lottieClassName="h-28 w-28"
+        lottieClassName='h-28 w-28'
         onConfirm={handleConfirmBackWithoutSave}
         onClose={() => setShowBackConfirm(false)}
       />
 
       <ConfirmModal
         open={Boolean(deleteTargetId)}
-        title="Xóa cặp thẻ này?"
-        message="Cả mặt trước và mặt sau của thẻ sẽ bị xóa."
-        confirmText="Xóa thẻ"
-        cancelText="Hủy"
-        variant="danger"
+        title='Xóa cặp thẻ này?'
+        message='Cả mặt trước và mặt sau của thẻ sẽ bị xóa.'
+        confirmText='Xóa thẻ'
+        cancelText='Hủy'
+        variant='danger'
         loading={isDeletingCard}
         onConfirm={handleConfirmDeleteCard}
         onClose={() => setDeleteTargetId(null)}
