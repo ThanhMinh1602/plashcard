@@ -416,10 +416,10 @@ export default function CardsList({
 
     try {
       await updatePackageBackground(user.uid, packageItem.id, backgroundPairId);
-      setSaveMessage('ÄÃ£ lÆ°u ná»n chung cho gÃ³i');
+      setSaveMessage('Đã lưu nền thành công');
     } catch (err) {
       console.error(err);
-      setError('Lá»—i lÆ°u ná»n chung cá»§a gÃ³i');
+      setError('Lỗi lưu nền chung của gói');
     }
   };
 

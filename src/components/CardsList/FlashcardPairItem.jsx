@@ -145,7 +145,7 @@ export default function FlashcardPairItem({
               opacity={toolbox.opacity}
               backgroundColor={FRONT_PAPER_COLOR}
               backgroundImage={backgroundPair.front}
-              inputMode='all'
+              inputMode='stylusOnly'
               paperPattern='grid'
               paperGridSize={24}
               paperGridColor='rgba(14, 165, 233, 0.16)'
@@ -172,7 +172,7 @@ export default function FlashcardPairItem({
               opacity={toolbox.opacity}
               backgroundColor={BACK_PAPER_COLOR}
               backgroundImage={backgroundPair.back}
-              inputMode='all'
+              inputMode='stylusOnly'
               paperPattern='grid'
               paperGridSize={24}
               paperGridColor='rgba(236, 72, 153, 0.15)'
