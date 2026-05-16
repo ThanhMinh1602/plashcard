@@ -70,3 +70,10 @@ export async function resetPassword(email, otp, newPassword) {
     body: { email, otp, newPassword },
   });
 }
+
+export async function changePassword(currentPassword, newPassword) {
+  return apiRequest('/auth/change-password', {
+    method: 'PATCH',
+    body: { currentPassword, newPassword },
+  });
+}

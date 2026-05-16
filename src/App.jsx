@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 
 import { useLocation, useNavigate } from "react-router-dom";
-import { FiLogOut, FiStar } from "react-icons/fi";
+import { FiStar } from "react-icons/fi";
 import { Player } from "@lottiefiles/react-lottie-player";
 
 import { getCurrentUser, logout } from "./services/authService";
 
 import ConfirmModal from "./components/Common/ConfirmModal";
+import AppSidebar from "./components/Common/AppSidebar";
 
 import AppRoutes from "./routes/AppRoutes";
 
@@ -125,6 +126,12 @@ function App() {
   const isPackagesPage = location.pathname === "/packages";
 
   const isEditorMode = location.pathname === "/packages/edit";
+  const sidebarActive =
+    location.pathname === "/packages/trash"
+      ? "trash"
+      : location.pathname === "/change-password"
+        ? "password"
+        : "";
 
   return (
     <>
@@ -162,7 +169,7 @@ function App() {
               </div>
 
               <div className='flex shrink-0 items-center gap-2 sm:gap-3'>
-                <div className='hidden max-w-[280px] items-center rounded-2xl border border-white/70 bg-white/75 px-4 py-2.5 text-sm text-slate-500 shadow-sm sm:flex'>
+                <div className='hidden h-12 max-w-[280px] items-center rounded-2xl border border-white/70 bg-white/75 px-4 text-sm text-slate-500 shadow-sm sm:flex'>
                   <span className='truncate'>
                     Chào,{" "}
                     <span className='font-bold text-slate-800'>
@@ -171,15 +178,14 @@ function App() {
                   </span>
                 </div>
 
-                <button
-                  onClick={handleLogoutClick}
-                  className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-sm font-black text-rose-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-100'
-                  type='button'
-                >
-                  <FiLogOut size={16} />
-
-                  <span className='hidden sm:inline'>Đăng xuất</span>
-                </button>
+                <AppSidebar
+                  user={user}
+                  active={sidebarActive}
+                  inline
+                  onOpenTrash={() => navigate("/packages/trash")}
+                  onChangePassword={() => navigate("/change-password")}
+                  onLogout={handleLogoutClick}
+                />
               </div>
             </div>
           </header>

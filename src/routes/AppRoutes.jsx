@@ -6,6 +6,7 @@ import { addPackage } from '../services/flashcardService';
 import Login from '../components/Auth/Login';
 import Register from '../components/Auth/Register';
 import ForgotPassword from '../components/Auth/ForgotPassword';
+import ChangePassword from '../components/Auth/ChangePassword';
 import PackageList from '../components/Packages/PackageList';
 import PackageTrash from '../components/Packages/PackageTrash';
 import CardsList from '../components/CardsList/CardsList';
@@ -135,6 +136,15 @@ export default function AppRoutes({ user }) {
         element={
           <ProtectedRoute user={user}>
             <PackageTrash user={user} onBack={handleBackToPackages} />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/change-password"
+        element={
+          <ProtectedRoute user={user}>
+            <ChangePassword onBack={handleBackToPackages} />
           </ProtectedRoute>
         }
       />
