@@ -1,9 +1,4 @@
-import {
-  FiCircle,
-  FiMinus,
-  FiPenTool,
-  FiSquare,
-} from 'react-icons/fi';
+import { FiMove, FiPenTool } from 'react-icons/fi';
 import { BsEraser } from 'react-icons/bs';
 import { GiFeather } from 'react-icons/gi';
 import { MdBrush } from 'react-icons/md';
@@ -13,7 +8,9 @@ import { DEFAULT_CARD_BACKGROUND_PAIR_ID } from '../../utils/cardBackgrounds';
 
 export const TOOL_LIST = [
   { id: 'eraser', icon: BsEraser, label: 'Eraser' },
+  { id: 'select', icon: FiMove, label: 'Move' },
 ];
+
 
 export const BRUSH_TYPES = [
   { id: 'pen', icon: FiPenTool, label: 'Pen' },

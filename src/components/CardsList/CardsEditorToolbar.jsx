@@ -1,10 +1,5 @@
 import React, { useEffect } from "react";
-import {
-  FiUpload,
-  FiCornerUpLeft,
-  FiCornerUpRight,
-  FiPlus,
-} from "react-icons/fi";
+import { FiCornerUpLeft, FiCornerUpRight, FiPlus } from "react-icons/fi";
 import { Player } from "@lottiefiles/react-lottie-player";
 import { BRUSH_TYPES, TOOL_LIST, cn } from "./constants";
 import usePenPress from "./hooks/usePenPress";
@@ -20,13 +15,12 @@ export default function CardsEditorToolbar({
   activeStatus,
   toolbox,
   setToolbox,
-  handleImportClick,
   handleAddCardPair,
   canAddCard,
 }) {
   const bindPress = usePenPress();
-
   const isEraser = toolbox.tool === "eraser";
+  const isSelect = toolbox.tool === "select";
   const currentSize = isEraser
     ? toolbox.eraserSize || 20
     : toolbox.brushSizes[toolbox.brushType] || 4;
@@ -34,16 +28,13 @@ export default function CardsEditorToolbar({
     ? "#ffffff"
     : toolbox.brushColors[toolbox.brushType] || "#000000";
   const maxSize = isEraser ? 100 : 50;
-  const displaySize = Math.min(currentSize, maxSize);
 
   useEffect(() => {
     if (!isEraser && toolbox.size > 50) {
-      setToolbox((prev) => ({
-        ...prev,
-        size: 50,
-      }));
+      setToolbox((prev) => ({ ...prev, size: 50 }));
     }
   }, [isEraser, toolbox.size, setToolbox]);
+
   return (
     <div className='rounded-xl border border-slate-200 bg-white/50 px-3 py-1.5 shadow-sm'>
       <div className='flex w-full flex-col gap-2 overflow-x-auto pb-0.5'>
@@ -90,7 +81,9 @@ export default function CardsEditorToolbar({
             {BRUSH_TYPES.map((item) => {
               const Icon = item.icon;
               const active =
-                toolbox.brushType === item.id && toolbox.tool !== "eraser";
+                toolbox.brushType === item.id &&
+                toolbox.tool !== "eraser" &&
+                toolbox.tool !== "select";
 
               return (
                 <button
@@ -119,9 +112,7 @@ export default function CardsEditorToolbar({
 
             <div className='mx-1 h-5 w-px bg-sky-200/60' />
 
-            {TOOL_LIST.filter(
-              (item) => item.id !== "brush" && item.id !== "draw",
-            ).map((item) => {
+            {TOOL_LIST.map((item) => {
               const Icon = item.icon;
               const active = toolbox.tool === item.id;
 
@@ -150,24 +141,6 @@ export default function CardsEditorToolbar({
             })}
           </div>
 
-          {/* 👇 3 con khỉ chạy liên tục cùng lúc */}
-          <div className='flex items-center gap-1 shrink-0'>
-            {MONKEY_LIST.map((anim, i) => (
-              <div key={i} className='h-9 w-9 transition-all duration-300'>
-                <Player autoplay loop src={anim} className='h-full w-full' />
-              </div>
-            ))}
-          </div>
-
-          <button
-            type='button'
-            {...bindPress(handleImportClick)}
-            className='inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-white px-2.5 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-100 hover:text-slate-900 touch-none'
-          >
-            <FiUpload size={13} />
-            <span>Import</span>
-          </button>
-
           <button
             type='button'
             disabled={!canAddCard}
@@ -182,6 +155,14 @@ export default function CardsEditorToolbar({
             <FiPlus size={16} />
             <span>Thêm thẻ</span>
           </button>
+
+          <div className='flex items-center gap-1 shrink-0'>
+            {MONKEY_LIST.map((anim, i) => (
+              <div key={i} className='h-9 w-9 transition-all duration-300'>
+                <Player autoplay loop src={anim} className='h-full w-full' />
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className='flex w-full min-w-max items-center gap-2'>
@@ -192,22 +173,23 @@ export default function CardsEditorToolbar({
 
             <input
               type='color'
-              value={currentColor} // Hiển thị màu của bút hiện tại
+              value={currentColor}
               onChange={(e) => {
                 const newColor = e.target.value;
                 setToolbox((prev) => ({
                   ...prev,
-                  // Cập nhật màu riêng cho loại bút này
                   brushColors: {
                     ...prev.brushColors,
                     [prev.brushType]: newColor,
                   },
                 }));
               }}
-              disabled={isEraser} // Tắt chọn màu khi dùng cục tẩy
+              disabled={isEraser || isSelect}
               className={cn(
                 "color-picker-soft h-5 w-5 rounded bg-transparent touch-none",
-                isEraser ? "cursor-not-allowed opacity-30" : "cursor-pointer",
+                isEraser || isSelect
+                  ? "cursor-not-allowed opacity-30"
+                  : "cursor-pointer",
               )}
             />
           </div>
@@ -221,14 +203,11 @@ export default function CardsEditorToolbar({
               type='range'
               min='1'
               max={maxSize}
-              value={currentSize} // Dùng currentSize đã tính ở trên
+              value={currentSize}
               onChange={(e) => {
                 const val = Number(e.target.value);
                 setToolbox((prev) => {
-                  if (isEraser) {
-                    return { ...prev, eraserSize: val };
-                  }
-                  // Cập nhật chỉ size của loại bút hiện tại
+                  if (isEraser) return { ...prev, eraserSize: val };
                   return {
                     ...prev,
                     brushSizes: {
@@ -238,28 +217,11 @@ export default function CardsEditorToolbar({
                   };
                 });
               }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (e.pointerType === "pen") {
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                }
-              }}
-              onPointerMove={(e) => {
-                if (e.pointerType === "pen" && e.buttons > 0) {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const percent = Math.max(
-                    0,
-                    Math.min(1, (e.clientX - rect.left) / rect.width),
-                  );
-                  const val = Math.round(1 + percent * (maxSize - 1));
-                  setToolbox((prev) =>
-                    isEraser
-                      ? { ...prev, eraserSize: val }
-                      : { ...prev, size: val },
-                  );
-                }
-              }}
-              className='range-soft w-full min-w-[80px] touch-none'
+              disabled={isSelect}
+              className={cn(
+                "range-soft w-full min-w-[80px] touch-none",
+                isSelect && "cursor-not-allowed opacity-30",
+              )}
             />
 
             <span className='w-[24px] text-right text-[11px] font-bold text-slate-600'>
@@ -284,31 +246,10 @@ export default function CardsEditorToolbar({
                   opacity: Number(e.target.value),
                 }))
               }
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (e.pointerType === "pen") {
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                }
-              }}
-              onPointerMove={(e) => {
-                if (e.pointerType === "pen" && e.buttons > 0) {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const percent = Math.max(
-                    0,
-                    Math.min(1, (e.clientX - rect.left) / rect.width),
-                  );
-                  const val = 0.1 + percent * 0.9;
-                  const rounded = Math.round(val * 20) / 20;
-                  setToolbox((prev) => ({
-                    ...prev,
-                    opacity: rounded,
-                  }));
-                }
-              }}
-              disabled={isEraser}
+              disabled={isEraser || isSelect}
               className={cn(
                 "range-soft w-24 touch-none",
-                isEraser && "cursor-not-allowed opacity-30",
+                (isEraser || isSelect) && "cursor-not-allowed opacity-30",
               )}
             />
             <span className='w-[32px] text-right text-[11px] font-bold text-slate-600'>

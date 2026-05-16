@@ -58,6 +58,9 @@ const DrawingScreen = forwardRef(
     const historyRef = useRef([]);
     const redoHistoryRef = useRef([]);
     const currentStrokeRef = useRef(null);
+    const selectionRef = useRef(null);
+    const selectionDraftRef = useRef(null);
+    const selectionDragRef = useRef(null);
     const rafRef = useRef(null);
     const redrawCanvasRef = useRef(null);
 
@@ -96,6 +99,15 @@ const DrawingScreen = forwardRef(
       backgroundColorRef.current = backgroundColor;
       redrawCanvasRef.current?.();
     }, [backgroundColor]);
+
+    useEffect(() => {
+      if (tool === 'select') return;
+
+      selectionRef.current = null;
+      selectionDraftRef.current = null;
+      selectionDragRef.current = null;
+      redrawCanvasRef.current?.();
+    }, [tool]);
 
     useEffect(() => {
       let cancelled = false;
@@ -142,6 +154,189 @@ const DrawingScreen = forwardRef(
         canUndo: historyRef.current.length > 0,
         canRedo: redoHistoryRef.current.length > 0,
       });
+    }, []);
+
+    const getActionBounds = useCallback((action) => {
+      if (action?.type === 'image') {
+        return {
+          minX: action.x,
+          minY: action.y,
+          maxX: action.x + action.width,
+          maxY: action.y + action.height,
+        };
+      }
+
+      if (action?.type !== 'stroke' || !action.points?.length) return null;
+
+      const xs = action.points.map((point) => point[0]);
+      const ys = action.points.map((point) => point[1]);
+      const padding = Math.max(Number(action.size) || 1, 1) * 2;
+
+      return {
+        minX: Math.min(...xs) - padding,
+        minY: Math.min(...ys) - padding,
+        maxX: Math.max(...xs) + padding,
+        maxY: Math.max(...ys) + padding,
+      };
+    }, []);
+
+    const getCombinedBounds = useCallback((actions) => {
+      const bounds = actions.map(getActionBounds).filter(Boolean);
+      if (!bounds.length) return null;
+
+      return {
+        minX: Math.min(...bounds.map((item) => item.minX)),
+        minY: Math.min(...bounds.map((item) => item.minY)),
+        maxX: Math.max(...bounds.map((item) => item.maxX)),
+        maxY: Math.max(...bounds.map((item) => item.maxY)),
+      };
+    }, [getActionBounds]);
+
+    const isPointInBounds = (point, bounds) => {
+      return (
+        point[0] >= bounds.minX &&
+        point[0] <= bounds.maxX &&
+        point[1] >= bounds.minY &&
+        point[1] <= bounds.maxY
+      );
+    };
+
+    const isPointInPolygon = (point, polygon) => {
+      if (!polygon || polygon.length < 3) return false;
+
+      let inside = false;
+      const [x, y] = point;
+
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i][0];
+        const yi = polygon[i][1];
+        const xj = polygon[j][0];
+        const yj = polygon[j][1];
+        const intersects =
+          yi > y !== yj > y &&
+          x < ((xj - xi) * (y - yi)) / (yj - yi || 1) + xi;
+
+        if (intersects) inside = !inside;
+      }
+
+      return inside;
+    };
+
+    const pointMatchesSelection = useCallback((point, selection) => {
+      if (!selection) return false;
+
+      if (selection.mode === 'rect') {
+        return isPointInBounds(point, selection.bounds);
+      }
+
+      return isPointInPolygon(point, selection.points);
+    }, []);
+
+    const actionMatchesSelection = useCallback((action, selection) => {
+      const bounds = getActionBounds(action);
+      if (!bounds) return false;
+
+      const center = [
+        (bounds.minX + bounds.maxX) / 2,
+        (bounds.minY + bounds.maxY) / 2,
+      ];
+
+      return pointMatchesSelection(center, selection);
+    }, [getActionBounds, pointMatchesSelection]);
+
+    const normalizeStrokeSegment = useCallback((action, points) => {
+      if (!points?.length) return null;
+
+      const segmentPoints =
+        points.length === 1
+          ? [
+              points[0],
+              [points[0][0] + 0.01, points[0][1] + 0.01, points[0][2]],
+            ]
+          : points;
+
+      return {
+        ...action,
+        points: segmentPoints.map((point) => [...point]),
+      };
+    }, []);
+
+    const splitActionBySelection = useCallback((action, selection) => {
+      if (action?.type === 'image') {
+        return actionMatchesSelection(action, selection)
+          ? { outside: [], selected: [action] }
+          : { outside: [action], selected: [] };
+      }
+
+      if (action?.type !== 'stroke' || !action.points?.length) {
+        return { outside: [action], selected: [] };
+      }
+
+      const outside = [];
+      const selected = [];
+      let currentGroup = [];
+      let currentInside = null;
+
+      const flushGroup = () => {
+        const segment = normalizeStrokeSegment(action, currentGroup);
+        if (!segment) return;
+
+        if (currentInside) {
+          selected.push(segment);
+        } else {
+          outside.push(segment);
+        }
+      };
+
+      action.points.forEach((point) => {
+        const inside = pointMatchesSelection(point, selection);
+
+        if (currentInside === null) {
+          currentInside = inside;
+          currentGroup = [point];
+          return;
+        }
+
+        if (inside === currentInside) {
+          currentGroup.push(point);
+          return;
+        }
+
+        flushGroup();
+        currentInside = inside;
+        currentGroup = [point];
+      });
+
+      flushGroup();
+
+      return { outside, selected };
+    }, [
+      actionMatchesSelection,
+      normalizeStrokeSegment,
+      pointMatchesSelection,
+    ]);
+
+    const moveAction = useCallback((action, dx, dy) => {
+      if (action.type === 'stroke') {
+        return {
+          ...action,
+          points: action.points.map((point) => [
+            point[0] + dx,
+            point[1] + dy,
+            point[2],
+          ]),
+        };
+      }
+
+      if (action.type === 'image') {
+        return {
+          ...action,
+          x: action.x + dx,
+          y: action.y + dy,
+        };
+      }
+
+      return action;
     }, []);
 
     const drawPaperBackground = useCallback((context, rect) => {
@@ -251,6 +446,46 @@ const DrawingScreen = forwardRef(
         mainContext.drawImage(activeCanvas, 0, 0, width, height);
       } else {
         mainContext.drawImage(historyCanvas, 0, 0, width, height);
+      }
+
+      const draft = selectionDraftRef.current;
+      const selection = selectionRef.current;
+      const overlay = draft || selection;
+
+      if (overlay) {
+        mainContext.save();
+        mainContext.globalCompositeOperation = 'source-over';
+        mainContext.strokeStyle = '#0ea5e9';
+        mainContext.fillStyle = 'rgba(14, 165, 233, 0.08)';
+        mainContext.lineWidth = 2;
+        mainContext.setLineDash([8, 5]);
+
+        if (overlay.mode === 'rect' && overlay.bounds) {
+          const rect = overlay.bounds;
+          mainContext.strokeRect(
+            rect.minX,
+            rect.minY,
+            rect.maxX - rect.minX,
+            rect.maxY - rect.minY,
+          );
+          mainContext.fillRect(
+            rect.minX,
+            rect.minY,
+            rect.maxX - rect.minX,
+            rect.maxY - rect.minY,
+          );
+        } else if (overlay.points?.length) {
+          mainContext.beginPath();
+          mainContext.moveTo(overlay.points[0][0], overlay.points[0][1]);
+          overlay.points.slice(1).forEach((point) => {
+            mainContext.lineTo(point[0], point[1]);
+          });
+          if (!draft) mainContext.closePath();
+          mainContext.stroke();
+          if (!draft) mainContext.fill();
+        }
+
+        mainContext.restore();
       }
     }, [drawAction, drawPaperBackground]);
 
@@ -425,6 +660,35 @@ const DrawingScreen = forwardRef(
         const point = createPointFromEvent(event);
         if (!point) return;
 
+        if (tool === 'select') {
+          const selectedBounds = selectionRef.current?.bounds;
+
+          if (selectedBounds && isPointInBounds(point, selectedBounds)) {
+            selectionDragRef.current = {
+              lastPoint: point,
+              indexes: selectionRef.current.indexes || [],
+            };
+            isDrawingRef.current = true;
+            return;
+          }
+
+          selectionRef.current = null;
+          selectionDraftRef.current = {
+            mode: 'lasso',
+            start: point,
+            points: [point],
+            bounds: {
+              minX: point[0],
+              minY: point[1],
+              maxX: point[0],
+              maxY: point[1],
+            },
+          };
+          isDrawingRef.current = true;
+          queueRedraw();
+          return;
+        }
+
         isDrawingRef.current = true;
         currentStrokeRef.current = {
           type: 'stroke', tool, brushType, color, size, opacity, points: [point],
@@ -438,11 +702,74 @@ const DrawingScreen = forwardRef(
         if (event.cancelable) event.preventDefault();
         event.stopPropagation();
 
-        if (!isDrawingRef.current || !currentStrokeRef.current) return;
+        if (!isDrawingRef.current) return;
+        if (tool !== 'select' && !currentStrokeRef.current) return;
         if (!shouldDrawWithPointer(event)) return;
         if (!event.isPrimary) return;
 
         const events = event.getCoalescedEvents?.() || [event];
+
+        if (tool === 'select') {
+          events.forEach((coalescedEvent) => {
+            const point = createPointFromEvent(coalescedEvent);
+            if (!point) return;
+
+            if (selectionDragRef.current) {
+              const lastPoint = selectionDragRef.current.lastPoint;
+              const dx = point[0] - lastPoint[0];
+              const dy = point[1] - lastPoint[1];
+              const indexSet = new Set(selectionDragRef.current.indexes);
+
+              historyRef.current = historyRef.current.map((action, index) =>
+                indexSet.has(index) ? moveAction(action, dx, dy) : action,
+              );
+
+              if (selectionRef.current?.bounds) {
+                selectionRef.current = {
+                  ...selectionRef.current,
+                  bounds: {
+                    minX: selectionRef.current.bounds.minX + dx,
+                    minY: selectionRef.current.bounds.minY + dy,
+                    maxX: selectionRef.current.bounds.maxX + dx,
+                    maxY: selectionRef.current.bounds.maxY + dy,
+                  },
+                  points: selectionRef.current.points?.map((item) => [
+                    item[0] + dx,
+                    item[1] + dy,
+                    item[2],
+                  ]),
+                };
+              }
+
+              selectionDragRef.current.lastPoint = point;
+              renderHistoryToCache();
+              queueRedraw();
+              return;
+            }
+
+            if (selectionDraftRef.current) {
+              const draft = selectionDraftRef.current;
+
+              if (draft.mode === 'rect') {
+                draft.bounds = {
+                  minX: Math.min(draft.start[0], point[0]),
+                  minY: Math.min(draft.start[1], point[1]),
+                  maxX: Math.max(draft.start[0], point[0]),
+                  maxY: Math.max(draft.start[1], point[1]),
+                };
+              } else {
+                appendSmoothPoint(draft.points, point);
+                draft.bounds = getCombinedBounds([
+                  { type: 'stroke', points: draft.points, size: 1 },
+                ]);
+              }
+            }
+          });
+
+          queueRedraw();
+          return;
+        }
+
         events.forEach((coalescedEvent) => {
           const point = createPointFromEvent(coalescedEvent);
           if (!point) return;
@@ -450,7 +777,7 @@ const DrawingScreen = forwardRef(
         });
         queueRedraw();
       },
-      [shouldDrawWithPointer, createPointFromEvent, queueRedraw]
+      [shouldDrawWithPointer, tool, createPointFromEvent, moveAction, renderHistoryToCache, queueRedraw, getCombinedBounds]
     );
 
     const finishCurrentStroke = useCallback((event) => {
@@ -461,6 +788,68 @@ const DrawingScreen = forwardRef(
         
         canvasRef.current?.releasePointerCapture?.(event?.pointerId);
         isDrawingRef.current = false;
+
+        if (tool === 'select') {
+          if (selectionDragRef.current) {
+            redoHistoryRef.current = [];
+            selectionDragRef.current = null;
+            renderHistoryToCache();
+            redrawCanvas();
+            updateStatus();
+            return;
+          }
+
+          const draft = selectionDraftRef.current;
+          selectionDraftRef.current = null;
+
+          if (draft) {
+            const nextHistory = [];
+            const selectedActions = [];
+
+            historyRef.current.forEach((action) => {
+              const { outside, selected } = splitActionBySelection(
+                action,
+                draft,
+              );
+
+              nextHistory.push(...outside);
+              selectedActions.push(...selected);
+            });
+
+            const bounds = getCombinedBounds(selectedActions);
+
+            if (selectedActions.length > 0 && bounds) {
+              const firstSelectedIndex = nextHistory.length;
+              const selectedIndexes = selectedActions.map(
+                (_action, index) => firstSelectedIndex + index,
+              );
+
+              historyRef.current = [...nextHistory, ...selectedActions];
+              redoHistoryRef.current = [];
+              selectionRef.current = {
+                mode: draft.mode,
+                points:
+                  draft.mode === 'rect'
+                    ? [
+                        [bounds.minX, bounds.minY, 0.5],
+                        [bounds.maxX, bounds.minY, 0.5],
+                        [bounds.maxX, bounds.maxY, 0.5],
+                        [bounds.minX, bounds.maxY, 0.5],
+                      ]
+                    : draft.points,
+                bounds,
+                indexes: selectedIndexes,
+              };
+              renderHistoryToCache();
+            } else {
+              selectionRef.current = null;
+            }
+          }
+
+          redrawCanvas();
+          updateStatus();
+          return;
+        }
 
         const stroke = currentStrokeRef.current;
         if (stroke) {
@@ -478,7 +867,7 @@ const DrawingScreen = forwardRef(
         renderHistoryToCache();
         redrawCanvas();
       },
-      [renderHistoryToCache, redrawCanvas, updateStatus]
+      [tool, splitActionBySelection, getCombinedBounds, renderHistoryToCache, redrawCanvas, updateStatus]
     );
 
     useEffect(() => {
@@ -514,6 +903,9 @@ const DrawingScreen = forwardRef(
         undo: () => {
           const last = historyRef.current.pop();
           if (!last) return;
+          selectionRef.current = null;
+          selectionDraftRef.current = null;
+          selectionDragRef.current = null;
           redoHistoryRef.current.push(last);
           currentStrokeRef.current = null;
           renderHistoryToCache();
@@ -523,6 +915,9 @@ const DrawingScreen = forwardRef(
         redo: () => {
           const next = redoHistoryRef.current.pop();
           if (!next) return;
+          selectionRef.current = null;
+          selectionDraftRef.current = null;
+          selectionDragRef.current = null;
           historyRef.current.push(next);
           currentStrokeRef.current = null;
           renderHistoryToCache();
