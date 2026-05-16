@@ -5,9 +5,11 @@ export async function loginWithEmail(email, password) {
     method: 'POST',
     body: { email, password },
   });
+
   authStorage.setToken(data.token);
   authStorage.setUser(data.user);
   window.dispatchEvent(new Event('auth-changed'));
+
   return data.user;
 }
 
@@ -16,14 +18,17 @@ export async function registerWithEmail(email, password) {
     method: 'POST',
     body: { email, password },
   });
+
   authStorage.setToken(data.token);
   authStorage.setUser(data.user);
   window.dispatchEvent(new Event('auth-changed'));
+
   return data.user;
 }
 
 export async function getCurrentUser() {
   const token = authStorage.getToken();
+
   if (!token) return null;
 
   try {
@@ -49,5 +54,19 @@ export async function forgotPassword(email) {
   return apiRequest('/auth/forgot-password', {
     method: 'POST',
     body: { email },
+  });
+}
+
+export async function verifyResetOtp(email, otp) {
+  return apiRequest('/auth/verify-reset-otp', {
+    method: 'POST',
+    body: { email, otp },
+  });
+}
+
+export async function resetPassword(email, otp, newPassword) {
+  return apiRequest('/auth/reset-password', {
+    method: 'POST',
+    body: { email, otp, newPassword },
   });
 }
