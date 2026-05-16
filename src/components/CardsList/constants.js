@@ -54,8 +54,8 @@ export const createLocalCard = (card = {}) => ({
   id: card.id || null,
   front: card.front || '',
   back: card.back || '',
-  frontData: card.frontData || null,
-  backData: card.backData || null,
+  frontData: null,
+  backData: null,
   backgroundPairId:
     card.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
 });

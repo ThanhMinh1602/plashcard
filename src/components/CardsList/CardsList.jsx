@@ -194,8 +194,6 @@ export default function CardsList({
       id: card.id || null,
       front: normalizeSnapshotValue(override.front ?? card.front),
       back: normalizeSnapshotValue(override.back ?? card.back),
-      frontData: normalizeSnapshotValue(override.frontData ?? card.frontData),
-      backData: normalizeSnapshotValue(override.backData ?? card.backData),
       backgroundPairId: normalizeSnapshotValue(
         override.backgroundPairId ?? card.backgroundPairId,
       ),
@@ -207,8 +205,6 @@ export default function CardsList({
       card.id ||
       card.front ||
       card.back ||
-      card.frontData ||
-      card.backData ||
       card.backgroundPairId !== DEFAULT_CARD_BACKGROUND_PAIR_ID,
     );
   };
@@ -220,14 +216,6 @@ export default function CardsList({
   };
 
   const getCurrentCardsSnapshot = () => {
-    const frontRef = currentEditId
-      ? getCanvasRefByKey(`${currentEditId}-front`)
-      : null;
-
-    const backRef = currentEditId
-      ? getCanvasRefByKey(`${currentEditId}-back`)
-      : null;
-
     return (cards || [])
       .map((card) => {
         const isCurrent = card.localId === currentEditId;
@@ -236,12 +224,14 @@ export default function CardsList({
           return createComparableCard(card);
         }
 
-        const frontDataFromCanvas = frontRef?.getSceneData?.();
-        const backDataFromCanvas = backRef?.getSceneData?.();
+        const frontRef = getCanvasRefByKey(`${currentEditId}-front`);
+        const backRef = getCanvasRefByKey(`${currentEditId}-back`);
+        const frontImg = frontRef?.toDataURL?.();
+        const backImg = backRef?.toDataURL?.();
 
         return createComparableCard(card, {
-          frontData: frontDataFromCanvas || card.frontData,
-          backData: backDataFromCanvas || card.backData,
+          front: frontImg || card.front,
+          back: backImg || card.back,
         });
       })
       .filter(shouldKeepCardInSnapshot);
@@ -274,6 +264,8 @@ export default function CardsList({
       if (!isCurrent) {
         return {
           ...item,
+          frontData: null,
+          backData: null,
           backgroundPairId:
             packageBackgroundPairId ||
             item.backgroundPairId ||
@@ -285,17 +277,15 @@ export default function CardsList({
       const backRef = getCanvasRefByKey(`${item.localId}-back`);
 
       const frontImg = frontRef?.toDataURL?.() || item.front || "";
-      const frontData = frontRef?.getSceneData?.() || item.frontData || null;
 
       const backImg = backRef?.toDataURL?.() || item.back || "";
-      const backData = backRef?.getSceneData?.() || item.backData || null;
 
       return {
         ...item,
         front: frontImg,
-        frontData,
         back: backImg,
-        backData,
+        frontData: null,
+        backData: null,
         backgroundPairId:
           packageBackgroundPairId ||
           item.backgroundPairId ||
@@ -331,14 +321,12 @@ export default function CardsList({
         pairId: card.localId,
         side: "front",
         content: card.front || "",
-        canvasData: card.frontData || null,
         backgroundPairId,
       },
       back: {
         pairId: card.localId,
         side: "back",
         content: card.back || "",
-        canvasData: card.backData || null,
         backgroundPairId,
       },
     };
@@ -353,18 +341,16 @@ export default function CardsList({
 
     const frontImg = frontRef?.toDataURL?.();
     const backImg = backRef?.toDataURL?.();
-    const frontDataStr = frontRef?.getSceneData?.();
-    const backDataStr = backRef?.getSceneData?.();
 
     setCards((prev) =>
       prev.map((card) => {
         if (card.localId === currentEditId) {
           return {
             ...card,
-            frontData: frontDataStr || card.frontData,
             front: frontImg || card.front,
-            backData: backDataStr || card.backData,
             back: backImg || card.back,
+            frontData: null,
+            backData: null,
           };
         }
 
@@ -492,10 +478,10 @@ export default function CardsList({
 
         if (doc.side === "front") {
           pairsMap[pId].front = doc.content;
-          pairsMap[pId].frontData = doc.canvasData;
+          pairsMap[pId].frontData = null;
         } else {
           pairsMap[pId].back = doc.content;
-          pairsMap[pId].backData = doc.canvasData;
+          pairsMap[pId].backData = null;
         }
 
         if (doc.backgroundPairId) {

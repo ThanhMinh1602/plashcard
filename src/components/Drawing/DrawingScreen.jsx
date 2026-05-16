@@ -67,6 +67,7 @@ const DrawingScreen = forwardRef(
     const onStatusChangeRef = useRef(onStatusChange);
     const backgroundColorRef = useRef(backgroundColor);
     const backgroundImageRef = useRef(null);
+    const baseImageRef = useRef(null);
 
     const paperConfigRef = useRef({
       paperPattern,
@@ -409,6 +410,20 @@ const DrawingScreen = forwardRef(
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.restore();
 
+      const baseImageNode = baseImageRef.current;
+      const mainCanvas = canvasRef.current;
+      if (baseImageNode && mainCanvas) {
+        context.globalCompositeOperation = 'source-over';
+        context.globalAlpha = 1;
+        context.drawImage(
+          baseImageNode,
+          0,
+          0,
+          mainCanvas.offsetWidth,
+          mainCanvas.offsetHeight,
+        );
+      }
+
       historyRef.current.forEach((action) => drawAction(context, action));
     }, [drawAction]);
 
@@ -552,38 +567,15 @@ const DrawingScreen = forwardRef(
         const rect = setupCanvasSize();
         if (!rect) return;
 
-        if (initialData) {
-          const hydrated = await hydrateSceneData(initialData);
-          if (!mounted) return;
-          historyRef.current = hydrated;
-          redoHistoryRef.current = [];
-          currentStrokeRef.current = null;
-          renderHistoryToCache();
-          redrawCanvas();
-          updateStatus();
-          return;
-        }
+        const [baseImageNode, hydrated] = await Promise.all([
+          initialImage ? loadImageNode(initialImage) : Promise.resolve(null),
+          initialData ? hydrateSceneData(initialData) : Promise.resolve([]),
+        ]);
 
-        if (initialImage) {
-          const imgNode = await loadImageNode(initialImage);
-          if (!mounted) return;
-          if (imgNode) {
-            historyRef.current = [{
-              type: 'image', dataUrl: initialImage, x: 0, y: 0,
-              width: rect.width, height: rect.height, imgNode,
-            }];
-          } else {
-            historyRef.current = [];
-          }
-          redoHistoryRef.current = [];
-          currentStrokeRef.current = null;
-          renderHistoryToCache();
-          redrawCanvas();
-          updateStatus();
-          return;
-        }
+        if (!mounted) return;
 
-        historyRef.current = [];
+        baseImageRef.current = baseImageNode;
+        historyRef.current = hydrated;
         redoHistoryRef.current = [];
         currentStrokeRef.current = null;
         renderHistoryToCache();
