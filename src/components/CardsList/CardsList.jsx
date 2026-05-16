@@ -14,6 +14,7 @@ import {
   deleteFlashcard,
   deletePackage,
   updatePackage,
+  updatePackageBackground,
   saveCardSide,
 } from '../../services/flashcardService';
 
@@ -22,6 +23,10 @@ import CardsEditorToolbar from './CardsEditorToolbar';
 import CardsEmptyState from './CardsEmptyState';
 import FlashcardPairItem from './FlashcardPairItem';
 import { DEFAULT_TOOLBOX, createLocalCard, cn } from './constants';
+import {
+  DEFAULT_CARD_BACKGROUND_PAIR_ID,
+  getCardBackgroundPair,
+} from '../../utils/cardBackgrounds';
 import usePackageEditor from './hooks/usePackageEditor';
 import useCanvasRegistry from './hooks/useCanvasRegistry';
 import usePenPress from './hooks/usePenPress';
@@ -46,6 +51,9 @@ export default function CardsList({
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [backConfirmMonkeyIndex, setBackConfirmMonkeyIndex] = useState(0);
   const [toolbox, setToolbox] = useState(DEFAULT_TOOLBOX);
+  const [packageBackgroundPairId, setPackageBackgroundPairId] = useState(
+    packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID
+  );
 
   const [currentEditId, setCurrentEditId] = useState(null);
   const thumbnailListRef = useRef(null);
@@ -118,6 +126,12 @@ export default function CardsList({
   const canAddCard = packageName.trim().length > 0;
   const currentCard = cards.find((c) => c.localId === currentEditId);
 
+  useEffect(() => {
+    setPackageBackgroundPairId(
+      packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID
+    );
+  }, [packageItem?.id, packageItem?.backgroundPairId]);
+
   const normalizeSnapshotValue = (value) => {
     if (value === null || value === undefined) return '';
     if (typeof value === 'string') return value;
@@ -140,6 +154,9 @@ export default function CardsList({
       backData: normalizeSnapshotValue(
         override.backData ?? card.backData
       ),
+      backgroundPairId: normalizeSnapshotValue(
+        override.backgroundPairId ?? card.backgroundPairId
+      ),
     };
   };
 
@@ -149,7 +166,8 @@ export default function CardsList({
       card.front ||
       card.back ||
       card.frontData ||
-      card.backData
+      card.backData ||
+      card.backgroundPairId !== DEFAULT_CARD_BACKGROUND_PAIR_ID
     );
   };
 
@@ -318,9 +336,16 @@ export default function CardsList({
         pairsMap[pId].back = doc.content;
         pairsMap[pId].backData = doc.canvasData;
       }
+
+      if (doc.backgroundPairId) {
+        pairsMap[pId].backgroundPairId = doc.backgroundPairId;
+      }
     });
 
     const normalized = Object.values(pairsMap).map(p => createLocalCard(p));
+    if (!packageItem?.backgroundPairId && normalized[0]?.backgroundPairId) {
+      setPackageBackgroundPairId(normalized[0].backgroundPairId);
+    }
     setCards(normalized);
     markCardsSnapshotSaved(normalized);
 
@@ -376,6 +401,26 @@ export default function CardsList({
 
   const handleDeleteCardPair = (localId) => {
     setDeleteTargetId(localId);
+  };
+
+  const handleBackgroundPairChange = async (backgroundPairId) => {
+    setError('');
+    setSaveMessage('');
+    setPackageBackgroundPairId(backgroundPairId);
+    onPackageUpdated?.({
+      ...packageItem,
+      backgroundPairId,
+    });
+
+    if (!user?.uid || !packageItem?.id) return;
+
+    try {
+      await updatePackageBackground(user.uid, packageItem.id, backgroundPairId);
+      setSaveMessage('ÄÃ£ lÆ°u ná»n chung cho gÃ³i');
+    } catch (err) {
+      console.error(err);
+      setError('Lá»—i lÆ°u ná»n chung cá»§a gÃ³i');
+    }
   };
 
   const handleConfirmDeleteCard = async () => {
@@ -453,6 +498,11 @@ export default function CardsList({
 
     // Lưu thông tin package
     await updatePackage(user.uid, packageItem.id, packageName, packageDescription);
+    await updatePackageBackground(
+      user.uid,
+      packageItem.id,
+      packageBackgroundPairId
+    );
 
     const nextCards = [];
     for (const item of cards) {
@@ -464,6 +514,8 @@ export default function CardsList({
       const fData = isCurrent ? frontRef?.getSceneData?.() : item.frontData;
       const bImg = isCurrent ? backRef?.toDataURL?.() : item.back;
       const bData = isCurrent ? backRef?.getSceneData?.() : item.backData;
+      const backgroundPairId =
+        packageBackgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID;
 
       // Lưu TÁCH BIỆT mặt trước và mặt sau
       await Promise.all([
@@ -472,16 +524,25 @@ export default function CardsList({
           side: 'front',
           content: fImg || '',
           canvasData: fData || null,
+          backgroundPairId,
         }),
         saveCardSide(user.uid, packageItem.id, `${item.localId}_back`, {
           pairId: item.localId,
           side: 'back',
           content: bImg || '',
           canvasData: bData || null,
+          backgroundPairId,
         })
       ]);
 
-      nextCards.push({ ...item, front: fImg, frontData: fData, back: bImg, backData: bData });
+      nextCards.push({
+        ...item,
+        front: fImg,
+        frontData: fData,
+        back: bImg,
+        backData: bData,
+        backgroundPairId,
+      });
     }
 
     setCards(nextCards);
@@ -717,9 +778,24 @@ export default function CardsList({
 
   if (loading) {
     return (
-      <div className="mx-auto flex min-h-screen w-full items-center justify-center">
-        <div className="rounded-[28px] bg-white/85 px-8 py-8 text-center shadow-lg backdrop-blur-xl">
-          Đang tải...
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm">
+        <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]">
+          <div className="mb-4 h-32 w-32">
+            <Player
+              autoplay
+              loop
+              src={savingLottie}
+              className="h-full w-full"
+            />
+          </div>
+
+          <h3 className="text-lg font-black text-slate-800">
+            Đang tải thẻ...
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Hệ thống đang chuẩn bị dữ liệu và nền thẻ cho bộ này.
+          </p>
         </div>
       </div>
     );
@@ -786,6 +862,9 @@ export default function CardsList({
             >
               {cards.map((item) => {
                 const isActive = item.localId === currentEditId;
+                const backgroundPair = getCardBackgroundPair(
+                  packageBackgroundPairId || item.backgroundPairId
+                );
 
                 return (
                   <button
@@ -808,21 +887,33 @@ export default function CardsList({
                       )}
                     >
                       <div className="relative h-full w-1/2 border-r border-slate-100 bg-sky-50/30">
+                        <img
+                          src={backgroundPair.front}
+                          alt=""
+                          aria-hidden="true"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
                         {item.front && (
                           <img
                             src={item.front}
                             alt="F"
-                            className="absolute inset-0 h-full w-full object-cover p-1"
+                            className="absolute inset-0 h-full w-full object-cover"
                           />
                         )}
                       </div>
 
                       <div className="relative h-full w-1/2 bg-pink-50/30">
+                        <img
+                          src={backgroundPair.back}
+                          alt=""
+                          aria-hidden="true"
+                          className="absolute inset-0 h-full w-full object-cover"
+                        />
                         {item.back && (
                           <img
                             src={item.back}
                             alt="B"
-                            className="absolute inset-0 h-full w-full object-cover p-1"
+                            className="absolute inset-0 h-full w-full object-cover"
                           />
                         )}
                       </div>
@@ -914,6 +1005,11 @@ export default function CardsList({
                         toolbox={toolbox}
                         handleCanvasStatusChange={handleCanvasStatusChange}
                         handleDeleteCardPair={handleDeleteCardPair}
+                        backgroundPairId={
+                          packageBackgroundPairId ||
+                          currentCard.backgroundPairId
+                        }
+                        onBackgroundPairChange={handleBackgroundPairChange}
                       />
                     </div>
                   </div>

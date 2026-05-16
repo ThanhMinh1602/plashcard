@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Player } from '@lottiefiles/react-lottie-player';
 import {
   FiFolder,
   FiFolderPlus,
@@ -6,13 +7,13 @@ import {
   FiTrash2,
 } from 'react-icons/fi';
 import { BsFolder2Open, BsPlayCircle } from 'react-icons/bs';
-import HeroLoading from '../Common/HeroLoading';
 import {
   deletePackage,
   getFlashcards,
   getPackages,
 } from '../../services/flashcardService';
 import ConfirmModal from '../Common/ConfirmModal';
+import loadingLottie from '../../assets/lottie/sundance.json';
 
 export default function PackageList({
   user,
@@ -94,6 +95,29 @@ export default function PackageList({
 
   return (
     <>
+      {studyingId && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/35 backdrop-blur-sm">
+          <div className="mx-4 flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]">
+            <div className="mb-4 h-32 w-32">
+              <Player
+                autoplay
+                loop
+                src={loadingLottie}
+                className="h-full w-full"
+              />
+            </div>
+
+            <h3 className="text-lg font-black text-slate-800">
+              Đang tải bộ thẻ...
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Hệ thống đang chuẩn bị dữ liệu để bắt đầu phiên học.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="fixed inset-x-0 top-[100px] z-50 pointer-events-none">
         <div className="mx-auto flex w-full max-w-7xl justify-end px-4 sm:px-6 lg:px-8">
           <button

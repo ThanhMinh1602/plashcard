@@ -11,6 +11,8 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
+const DEFAULT_BACKGROUND_PAIR_ID = '1';
+
 // ===== USER & AUTH =====
 export const saveUserToFirestore = async (userId, email) => {
   try {
@@ -61,6 +63,7 @@ export const addPackage = async (userId, name = '', description = '') => {
     await setDoc(newPkgRef, {
       name: name?.trim() || '',
       description: description?.trim() || '',
+      backgroundPairId: DEFAULT_BACKGROUND_PAIR_ID,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -81,6 +84,27 @@ export const updatePackage = async (userId, packageId, name = '', description = 
     }, { merge: true });
   } catch (error) {
     console.error('Lỗi cập nhật gói:', error);
+    throw error;
+  }
+};
+
+export const updatePackageBackground = async (
+  userId,
+  packageId,
+  backgroundPairId = DEFAULT_BACKGROUND_PAIR_ID
+) => {
+  try {
+    const packageRef = doc(db, 'users', userId, 'packages', packageId);
+    await setDoc(
+      packageRef,
+      {
+        backgroundPairId: String(backgroundPairId || DEFAULT_BACKGROUND_PAIR_ID),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error('Lá»—i cáº­p nháº­t ná»n gÃ³i:', error);
     throw error;
   }
 };

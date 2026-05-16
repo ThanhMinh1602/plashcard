@@ -29,6 +29,7 @@ const DrawingScreen = forwardRef(
       size = 4,
       opacity = 1,
       backgroundColor = '#ffffff',
+      backgroundImage = '',
       inputMode = 'all',
       onStatusChange,
 
@@ -62,6 +63,7 @@ const DrawingScreen = forwardRef(
 
     const onStatusChangeRef = useRef(onStatusChange);
     const backgroundColorRef = useRef(backgroundColor);
+    const backgroundImageRef = useRef(null);
 
     const paperConfigRef = useRef({
       paperPattern,
@@ -96,6 +98,33 @@ const DrawingScreen = forwardRef(
     }, [backgroundColor]);
 
     useEffect(() => {
+      let cancelled = false;
+
+      if (!backgroundImage) {
+        backgroundImageRef.current = null;
+        redrawCanvasRef.current?.();
+        return undefined;
+      }
+
+      const image = new Image();
+      image.onload = () => {
+        if (cancelled) return;
+        backgroundImageRef.current = image;
+        redrawCanvasRef.current?.();
+      };
+      image.onerror = () => {
+        if (cancelled) return;
+        backgroundImageRef.current = null;
+        redrawCanvasRef.current?.();
+      };
+      image.src = backgroundImage;
+
+      return () => {
+        cancelled = true;
+      };
+    }, [backgroundImage]);
+
+    useEffect(() => {
       paperConfigRef.current = {
         paperPattern, paperGridSize, paperGridColor, paperBottomTintColor,
         paperBottomTintRows, paperLineSpacing, paperLineColor,
@@ -116,6 +145,14 @@ const DrawingScreen = forwardRef(
     }, []);
 
     const drawPaperBackground = useCallback((context, rect) => {
+      const backgroundImageNode = backgroundImageRef.current;
+      if (backgroundImageNode) {
+        context.globalCompositeOperation = 'source-over';
+        context.globalAlpha = 1;
+        context.drawImage(backgroundImageNode, 0, 0, rect.width, rect.height);
+        return;
+      }
+
       const config = paperConfigRef.current;
       if (config.paperPattern === 'grid') {
         drawGridPaperBackground(context, {

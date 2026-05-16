@@ -9,6 +9,7 @@ import { GiFeather } from 'react-icons/gi';
 import { MdBrush } from 'react-icons/md';
 import { PiPencilSimpleLineBold } from 'react-icons/pi';
 import { RiMarkPenLine } from 'react-icons/ri';
+import { DEFAULT_CARD_BACKGROUND_PAIR_ID } from '../../utils/cardBackgrounds';
 
 export const TOOL_LIST = [
   { id: 'eraser', icon: BsEraser, label: 'Eraser' },
@@ -58,6 +59,8 @@ export const createLocalCard = (card = {}) => ({
   back: card.back || '',
   frontData: card.frontData || null,
   backData: card.backData || null,
+  backgroundPairId:
+    card.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
 });
 
 export const cn = (...classes) => classes.filter(Boolean).join(' ');
