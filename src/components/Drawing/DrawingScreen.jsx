@@ -916,7 +916,7 @@ const DrawingScreen = forwardRef(
           redrawCanvas();
           updateStatus();
         },
-        toDataURL: () => {
+        toDataURL: (options = {}) => {
     const canvas = canvasRef.current;
     const historyCanvas = historyCanvasRef.current;
     if (!canvas || !historyCanvas) return '';
@@ -932,12 +932,29 @@ const DrawingScreen = forwardRef(
 
     // 3. CHỈ vẽ historyCanvas (lớp chứa các nét vẽ) vào canvas tạm
     // KHÔNG gọi drawPaperBackground ở đây
-    tempCtx.drawImage(historyCanvas, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+        if (options.excludeImages) {
+      const baseImageNode = baseImageRef.current;
+
+      if (baseImageNode) {
+        tempCtx.globalCompositeOperation = 'source-over';
+        tempCtx.globalAlpha = 1;
+        tempCtx.drawImage(baseImageNode, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+      }
+
+      historyRef.current
+        .filter((action) => action?.type !== 'image')
+        .forEach((action) => drawAction(tempCtx, action));
+    } else {
+      tempCtx.drawImage(historyCanvas, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+    }
     
     // 4. Trả về base64 dạng PNG trong suốt
     return tempCanvas.toDataURL('image/png');
   },
-        getSceneData: () => serializeSceneData(historyRef.current),
+        getSceneData: () =>
+          serializeSceneData(
+            historyRef.current.filter((action) => action?.type === 'image'),
+          ),
         importImageFile: async (file) => {
           const canvas = canvasRef.current;
           if (!canvas || !file) return;

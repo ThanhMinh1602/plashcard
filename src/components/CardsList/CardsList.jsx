@@ -194,6 +194,8 @@ export default function CardsList({
       id: card.id || null,
       front: normalizeSnapshotValue(override.front ?? card.front),
       back: normalizeSnapshotValue(override.back ?? card.back),
+      frontData: normalizeSnapshotValue(override.frontData ?? card.frontData),
+      backData: normalizeSnapshotValue(override.backData ?? card.backData),
       backgroundPairId: normalizeSnapshotValue(
         override.backgroundPairId ?? card.backgroundPairId,
       ),
@@ -205,6 +207,8 @@ export default function CardsList({
       card.id ||
       card.front ||
       card.back ||
+      card.frontData ||
+      card.backData ||
       card.backgroundPairId !== DEFAULT_CARD_BACKGROUND_PAIR_ID,
     );
   };
@@ -226,12 +230,16 @@ export default function CardsList({
 
         const frontRef = getCanvasRefByKey(`${currentEditId}-front`);
         const backRef = getCanvasRefByKey(`${currentEditId}-back`);
-        const frontImg = frontRef?.toDataURL?.();
-        const backImg = backRef?.toDataURL?.();
+        const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
+        const backImg = backRef?.toDataURL?.({ excludeImages: true });
+        const frontData = frontRef?.getSceneData?.();
+        const backData = backRef?.getSceneData?.();
 
         return createComparableCard(card, {
           front: frontImg || card.front,
           back: backImg || card.back,
+          frontData: frontData || card.frontData,
+          backData: backData || card.backData,
         });
       })
       .filter(shouldKeepCardInSnapshot);
@@ -264,8 +272,6 @@ export default function CardsList({
       if (!isCurrent) {
         return {
           ...item,
-          frontData: null,
-          backData: null,
           backgroundPairId:
             packageBackgroundPairId ||
             item.backgroundPairId ||
@@ -276,16 +282,20 @@ export default function CardsList({
       const frontRef = getCanvasRefByKey(`${item.localId}-front`);
       const backRef = getCanvasRefByKey(`${item.localId}-back`);
 
-      const frontImg = frontRef?.toDataURL?.() || item.front || "";
+      const frontImg =
+        frontRef?.toDataURL?.({ excludeImages: true }) || item.front || "";
+      const frontData = frontRef?.getSceneData?.() || item.frontData || null;
 
-      const backImg = backRef?.toDataURL?.() || item.back || "";
+      const backImg =
+        backRef?.toDataURL?.({ excludeImages: true }) || item.back || "";
+      const backData = backRef?.getSceneData?.() || item.backData || null;
 
       return {
         ...item,
         front: frontImg,
         back: backImg,
-        frontData: null,
-        backData: null,
+        frontData,
+        backData,
         backgroundPairId:
           packageBackgroundPairId ||
           item.backgroundPairId ||
@@ -321,12 +331,14 @@ export default function CardsList({
         pairId: card.localId,
         side: "front",
         content: card.front || "",
+        canvasData: card.frontData || null,
         backgroundPairId,
       },
       back: {
         pairId: card.localId,
         side: "back",
         content: card.back || "",
+        canvasData: card.backData || null,
         backgroundPairId,
       },
     };
@@ -339,8 +351,10 @@ export default function CardsList({
 
     if (!frontRef && !backRef) return;
 
-    const frontImg = frontRef?.toDataURL?.();
-    const backImg = backRef?.toDataURL?.();
+    const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
+    const backImg = backRef?.toDataURL?.({ excludeImages: true });
+    const frontData = frontRef?.getSceneData?.();
+    const backData = backRef?.getSceneData?.();
 
     setCards((prev) =>
       prev.map((card) => {
@@ -349,8 +363,8 @@ export default function CardsList({
             ...card,
             front: frontImg || card.front,
             back: backImg || card.back,
-            frontData: null,
-            backData: null,
+            frontData: frontData || card.frontData,
+            backData: backData || card.backData,
           };
         }
 
@@ -478,10 +492,10 @@ export default function CardsList({
 
         if (doc.side === "front") {
           pairsMap[pId].front = doc.content;
-          pairsMap[pId].frontData = null;
+          pairsMap[pId].frontData = doc.canvasData || null;
         } else {
           pairsMap[pId].back = doc.content;
-          pairsMap[pId].backData = null;
+          pairsMap[pId].backData = doc.canvasData || null;
         }
 
         if (doc.backgroundPairId) {
@@ -840,17 +854,13 @@ export default function CardsList({
       return;
     }
 
-    if (!hasUnsavedCardChanges(currentSnapshot)) {
-      onBack?.();
-      return;
+    if (hasUnsavedCardChanges(currentSnapshot)) {
+      const nextCards = getCardsWithCurrentCanvasData();
+      setCards(nextCards);
+      saveDraftToLocal(nextCards);
     }
 
-    const nextMonkeyIndex =
-      (backConfirmMonkeyIndexRef.current + 1) % BACK_CONFIRM_MONKEY_LIST.length;
-
-    backConfirmMonkeyIndexRef.current = nextMonkeyIndex;
-    setBackConfirmMonkeyIndex(nextMonkeyIndex);
-    setShowBackConfirm(true);
+    onBack?.();
   };
 
   const handleConfirmBackWithoutSave = () => {

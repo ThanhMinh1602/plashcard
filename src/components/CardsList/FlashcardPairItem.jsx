@@ -134,6 +134,7 @@ export default function FlashcardPairItem({
               <DrawingScreen
                 ref={setCanvasRef(frontKey)}
                 initialImage={item.front}
+                initialData={item.frontData}
                 tool={toolbox.tool}
                 brushType={toolbox.brushType}
                 color={drawingColor}
@@ -160,6 +161,7 @@ export default function FlashcardPairItem({
               <DrawingScreen
                 ref={setCanvasRef(backKey)}
                 initialImage={item.back}
+                initialData={item.backData}
                 tool={toolbox.tool}
                 brushType={toolbox.brushType}
                 color={drawingColor}
