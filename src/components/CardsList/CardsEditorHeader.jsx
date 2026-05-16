@@ -14,7 +14,6 @@ export default function CardsEditorHeader({
   cancelHeaderNameEdit,
   openNameEditor,
   packageName,
-  isAutoSaving,
   handleSaveAll,
   savingAll,
   nameError,
@@ -106,13 +105,10 @@ export default function CardsEditorHeader({
 
           <div
             className={cn(
-              'hidden sm:inline-flex h-9 items-center rounded-lg px-3 text-xs font-bold uppercase tracking-wider',
-              isAutoSaving
-                ? 'bg-sky-50 text-sky-600'
-                : 'bg-emerald-50 text-emerald-600'
+              'hidden sm:inline-flex h-9 items-center rounded-lg bg-sky-50 px-3 text-xs font-bold uppercase tracking-wider text-sky-600'
             )}
           >
-            {isAutoSaving ? 'Đang lưu...' : 'Đã lưu'}
+            Bản nháp local
           </div>
 
           <button

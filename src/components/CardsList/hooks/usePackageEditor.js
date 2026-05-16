@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { updatePackage } from '../../../services/flashcardService';
 
 export default function usePackageEditor({
   user,
@@ -21,7 +20,6 @@ export default function usePackageEditor({
   const [draftPackageName, setDraftPackageName] = useState(
     packageItem?.name || ''
   );
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [packageTouched, setPackageTouched] = useState(false);
   const [nameError, setNameError] = useState('');
 
@@ -50,7 +48,6 @@ export default function usePackageEditor({
     setDebouncedPackageDescription(packageItem?.description || '');
     setDraftPackageName(packageItem?.name || '');
     setIsEditingName(false);
-    setIsAutoSaving(false);
     setPackageTouched(false);
     setNameError('');
 
@@ -93,73 +90,9 @@ export default function usePackageEditor({
   }, [packageName, packageDescription, packageTouched]);
 
   useEffect(() => {
-    if (!user || !packageItem?.id) return;
-    if (!initialSyncDoneRef.current) return;
     if (!packageTouched) return;
-
-    const lastSaved = lastSavedPackageRef.current;
-    if (
-      debouncedPackageName === lastSaved.name &&
-      debouncedPackageDescription === lastSaved.description
-    ) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const autoSavePackage = async () => {
-      try {
-        setIsAutoSaving(true);
-        setError?.('');
-
-        await updatePackage(
-          user.uid,
-          packageItem.id,
-          debouncedPackageName,
-          debouncedPackageDescription
-        );
-
-        if (cancelled) return;
-
-        lastSavedPackageRef.current = {
-          name: debouncedPackageName,
-          description: debouncedPackageDescription,
-        };
-
-        onPackageUpdatedRef.current?.({
-          ...packageItemRef.current,
-          name: debouncedPackageName,
-          description: debouncedPackageDescription,
-        });
-
-        if (debouncedPackageName.trim()) {
-          setNameError('');
-        }
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setError?.('Lỗi tự động lưu tên gói');
-        }
-      } finally {
-        if (!cancelled) {
-          setIsAutoSaving(false);
-        }
-      }
-    };
-
-    autoSavePackage();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    debouncedPackageName,
-    debouncedPackageDescription,
-    packageTouched,
-    user,
-    packageItem?.id,
-    setError,
-  ]);
+    if (debouncedPackageName.trim()) setNameError('');
+  }, [debouncedPackageName, debouncedPackageDescription, packageTouched]);
 
   useEffect(() => {
     if (!isEditingName) return;
@@ -236,9 +169,10 @@ export default function usePackageEditor({
     packageDescription,
     isEditingName,
     draftPackageName,
-    isAutoSaving,
     nameError,
     headerNameInputRef,
+    setPackageName,
+    setPackageDescription,
     setDraftPackageName,
     openNameEditor,
     saveHeaderName,

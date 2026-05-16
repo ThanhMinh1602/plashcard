@@ -272,6 +272,8 @@ export const serializeSceneData = (actions) => {
   const dataToSave = actions.map((action) => {
     const copy = { ...action };
     delete copy.imgNode;
+    delete copy.baseBeforeImgNode;
+    delete copy.baseAfterImgNode;
     return copy;
   });
 

@@ -9,13 +9,9 @@ import { motion, AnimatePresence } from "motion/react";
 import ConfirmModal from "../Common/ConfirmModal";
 import {
   getFlashcards,
-  addFlashcard,
-  updateFlashcard,
   deleteFlashcard,
-  deletePackage,
   updatePackage,
   updatePackageBackground,
-  saveCardSide,
   bulkSaveCards,
 } from "../../services/flashcardService";
 
@@ -62,6 +58,8 @@ export default function CardsList({
   const thumbnailListRef = useRef(null);
   const backConfirmMonkeyIndexRef = useRef(-1);
   const savedCardsSnapshotRef = useRef([]);
+  const deletedCardIdsRef = useRef([]);
+  const draftHydratedRef = useRef(false);
   const openProgressTimerRef = useRef(null);
 
   const cardGestureAreaRef = useRef(null);
@@ -94,9 +92,10 @@ export default function CardsList({
     packageDescription,
     isEditingName,
     draftPackageName,
-    isAutoSaving,
     nameError,
     headerNameInputRef,
+    setPackageName,
+    setPackageDescription,
     setDraftPackageName,
     openNameEditor,
     saveHeaderName,
@@ -131,6 +130,7 @@ export default function CardsList({
   const currentCard = cards.find((c) => c.localId === currentEditId);
 
   useEffect(() => {
+    draftHydratedRef.current = false;
     setPackageBackgroundPairId(
       packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
     );
@@ -149,6 +149,8 @@ export default function CardsList({
         key,
         JSON.stringify({
           cards: nextCards,
+          packageName,
+          packageDescription,
           packageBackgroundPairId,
           currentEditId,
           updatedAt: Date.now(),
@@ -518,6 +520,14 @@ export default function CardsList({
           setPackageBackgroundPairId(localDraft.packageBackgroundPairId);
         }
 
+        if (localDraft.packageName !== undefined) {
+          setPackageName(localDraft.packageName || "");
+        }
+
+        if (localDraft.packageDescription !== undefined) {
+          setPackageDescription(localDraft.packageDescription || "");
+        }
+
         setSaveMessage("Đã khôi phục bản nháp chưa lưu trên máy");
       } else if (
         !packageItem?.backgroundPairId &&
@@ -541,6 +551,7 @@ export default function CardsList({
     } catch (err) {
       setError("Lỗi tải thẻ từ Cloud");
     } finally {
+      draftHydratedRef.current = true;
       if (openProgressTimerRef.current) {
         clearInterval(openProgressTimerRef.current);
         openProgressTimerRef.current = null;
@@ -551,13 +562,81 @@ export default function CardsList({
     }
   };
 
+  const getCardsWithCurrentCanvasLocalDraft = () => {
+    return (cards || []).map((item) => {
+      const isCurrent = item.localId === currentEditId;
+
+      if (!isCurrent) {
+        return {
+          ...item,
+          backgroundPairId:
+            packageBackgroundPairId ||
+            item.backgroundPairId ||
+            DEFAULT_CARD_BACKGROUND_PAIR_ID,
+        };
+      }
+
+      const frontRef = getCanvasRefByKey(`${item.localId}-front`);
+      const backRef = getCanvasRefByKey(`${item.localId}-back`);
+
+      const frontImg =
+        frontRef?.toDataURL?.({ excludeImages: true }) || item.front || "";
+      const frontBase =
+        frontRef?.getBaseImageDataURL?.() ||
+        item.frontBase ||
+        item.front ||
+        null;
+      const backImg =
+        backRef?.toDataURL?.({ excludeImages: true }) || item.back || "";
+      const backBase =
+        backRef?.getBaseImageDataURL?.() ||
+        item.backBase ||
+        item.back ||
+        null;
+      const frontData =
+        frontRef?.getFullSceneData?.() ||
+        frontRef?.getSceneData?.() ||
+        item.frontData ||
+        null;
+      const backData =
+        backRef?.getFullSceneData?.() ||
+        backRef?.getSceneData?.() ||
+        item.backData ||
+        null;
+
+      return {
+        ...item,
+        front: frontImg,
+        back: backImg,
+        frontBase,
+        backBase,
+        frontData,
+        backData,
+        backgroundPairId:
+          packageBackgroundPairId ||
+          item.backgroundPairId ||
+          DEFAULT_CARD_BACKGROUND_PAIR_ID,
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (!draftHydratedRef.current || loading) return;
+
+    saveDraftToLocal(getCardsWithCurrentCanvasLocalDraft(), {
+      packageName,
+      packageDescription,
+    });
+  }, [packageName, packageDescription]);
+
   const handleSwitchCard = (targetId) => {
     if (currentEditId === targetId) return;
 
     const nextCards = getCardsWithCurrentCanvasData();
+    const localDraftCards = getCardsWithCurrentCanvasLocalDraft();
 
-    setCards(nextCards);
-    saveDraftToLocal(nextCards);
+    setCards(localDraftCards);
+    saveDraftToLocal(localDraftCards);
 
     resetCardTransform();
     setCurrentEditId(targetId);
@@ -573,39 +652,11 @@ export default function CardsList({
     }
 
     const nextCardsBeforeAdd = getCardsWithCurrentCanvasData();
+    const localDraftCardsBeforeAdd = getCardsWithCurrentCanvasLocalDraft();
     const changedCards = getChangedCards(nextCardsBeforeAdd);
 
-    setCards(nextCardsBeforeAdd);
-    saveDraftToLocal(nextCardsBeforeAdd);
-
-    if (changedCards.length > 0 && user?.uid && packageItem?.id) {
-      const currentChangedCard = changedCards.find(
-        (item) => item.localId === currentEditId,
-      );
-
-      if (currentChangedCard) {
-        bulkSaveCards(user.uid, packageItem.id, [
-          toBulkCardPayload(currentChangedCard),
-        ])
-          .then(() => {
-            savedCardsSnapshotRef.current =
-              savedCardsSnapshotRef.current.filter(
-                (item) => item.id !== currentChangedCard.id,
-              );
-
-            savedCardsSnapshotRef.current.push(
-              createComparableCard(currentChangedCard),
-            );
-          })
-          .catch((err) => {
-            console.error(err);
-            setError(
-              "Thẻ vừa rồi chưa lưu lên server, nhưng bản nháp đã được giữ trên máy",
-            );
-          });
-      }
-    }
-
+    setCards(localDraftCardsBeforeAdd);
+    saveDraftToLocal(localDraftCardsBeforeAdd);
     resetCardTransform();
 
     const newCard = createLocalCard();
@@ -637,7 +688,7 @@ export default function CardsList({
     setDeleteTargetId(localId);
   };
 
-  const handleBackgroundPairChange = async (backgroundPairId) => {
+  const handleBackgroundPairChange = (backgroundPairId) => {
     setError("");
     setSaveMessage("");
     setPackageBackgroundPairId(backgroundPairId);
@@ -656,16 +707,6 @@ export default function CardsList({
       ...packageItem,
       backgroundPairId,
     });
-
-    if (!user?.uid || !packageItem?.id) return;
-
-    try {
-      await updatePackageBackground(user.uid, packageItem.id, backgroundPairId);
-      setSaveMessage("Đã lưu nền thành công");
-    } catch (err) {
-      console.error(err);
-      setError("Lỗi lưu nền chung của gói");
-    }
   };
 
   const handleConfirmDeleteCard = async () => {
@@ -683,10 +724,11 @@ export default function CardsList({
     try {
       setIsDeletingCard(true);
 
-      if (target.id) {
-        await deleteFlashcard(user.uid, packageItem.id, target.id);
-        removeCardFromSavedSnapshot(target.id);
+      if (target.id && !deletedCardIdsRef.current.includes(target.id)) {
+        deletedCardIdsRef.current.push(target.id);
       }
+
+      removeCardFromSavedSnapshot(target.id);
 
       removeCardBindings(localId);
 
@@ -744,8 +786,9 @@ export default function CardsList({
       setSaveMessage("");
 
       const nextCards = getCardsWithCurrentCanvasData();
+      const localDraftCards = getCardsWithCurrentCanvasLocalDraft();
 
-      saveDraftToLocal(nextCards);
+      saveDraftToLocal(localDraftCards);
 
       const nextName = packageName?.trim() || "";
       const nextDescription = packageDescription?.trim() || "";
@@ -772,6 +815,17 @@ export default function CardsList({
           packageItem.id,
           nextBackgroundPairId,
         );
+      }
+
+      const deletedCount = deletedCardIdsRef.current.length;
+
+      if (deletedCount > 0) {
+        await Promise.all(
+          deletedCardIdsRef.current.map((cardId) =>
+            deleteFlashcard(user.uid, packageItem.id, cardId),
+          ),
+        );
+        deletedCardIdsRef.current = [];
       }
 
       const changedCards = getChangedCards(nextCards);
@@ -840,24 +894,15 @@ export default function CardsList({
     const savedSnapshot = savedCardsSnapshotRef.current;
 
     if (currentSnapshot.length === 0 && savedSnapshot.length === 0) {
-      try {
-        if (user?.uid && packageItem?.id) {
-          await deletePackage(user.uid, packageItem.id);
-        }
-
-        onBack?.();
-      } catch (err) {
-        console.error(err);
-        setError("Lỗi thoát gói rỗng");
-      }
-
+      onBack?.();
       return;
     }
 
     if (hasUnsavedCardChanges(currentSnapshot)) {
       const nextCards = getCardsWithCurrentCanvasData();
+      const localDraftCards = getCardsWithCurrentCanvasLocalDraft();
       setCards(nextCards);
-      saveDraftToLocal(nextCards);
+      saveDraftToLocal(localDraftCards);
     }
 
     onBack?.();
@@ -1097,7 +1142,6 @@ export default function CardsList({
               cancelHeaderNameEdit={cancelHeaderNameEdit}
               openNameEditor={openNameEditor}
               packageName={packageName}
-              isAutoSaving={isAutoSaving}
               handleSaveAll={handleSaveAll}
               savingAll={savingAll || isBackSaving}
               nameError={nameError}

@@ -133,7 +133,7 @@ export default function FlashcardPairItem({
             >
               <DrawingScreen
                 ref={setCanvasRef(frontKey)}
-                initialImage={item.front}
+                initialImage={item.frontBase || item.front}
                 initialData={item.frontData}
                 tool={toolbox.tool}
                 brushType={toolbox.brushType}
@@ -160,7 +160,7 @@ export default function FlashcardPairItem({
             >
               <DrawingScreen
                 ref={setCanvasRef(backKey)}
-                initialImage={item.back}
+                initialImage={item.backBase || item.back}
                 initialData={item.backData}
                 tool={toolbox.tool}
                 brushType={toolbox.brushType}

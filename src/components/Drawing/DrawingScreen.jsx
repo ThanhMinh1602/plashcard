@@ -340,6 +340,103 @@ const DrawingScreen = forwardRef(
       return action;
     }, []);
 
+    const createPixelSelectionAction = useCallback(async (selection) => {
+      const baseImageNode = baseImageRef.current;
+      const canvas = canvasRef.current;
+      if (!baseImageNode || !canvas || !selection?.bounds) return null;
+
+      const canvasWidth = canvas.offsetWidth;
+      const canvasHeight = canvas.offsetHeight;
+      const minX = Math.max(0, Math.floor(selection.bounds.minX));
+      const minY = Math.max(0, Math.floor(selection.bounds.minY));
+      const maxX = Math.min(canvasWidth, Math.ceil(selection.bounds.maxX));
+      const maxY = Math.min(canvasHeight, Math.ceil(selection.bounds.maxY));
+      const width = Math.max(1, maxX - minX);
+      const height = Math.max(1, maxY - minY);
+
+      if (width <= 1 || height <= 1) return null;
+
+      const sourceCanvas = document.createElement('canvas');
+      sourceCanvas.width = canvasWidth;
+      sourceCanvas.height = canvasHeight;
+      const sourceContext = sourceCanvas.getContext('2d');
+      sourceContext.drawImage(baseImageNode, 0, 0, canvasWidth, canvasHeight);
+
+      const cropCanvas = document.createElement('canvas');
+      cropCanvas.width = width;
+      cropCanvas.height = height;
+      const cropContext = cropCanvas.getContext('2d');
+      cropContext.drawImage(
+        sourceCanvas,
+        minX,
+        minY,
+        width,
+        height,
+        0,
+        0,
+        width,
+        height,
+      );
+
+      if (selection.points?.length >= 3) {
+        cropContext.globalCompositeOperation = 'destination-in';
+        cropContext.beginPath();
+        cropContext.moveTo(selection.points[0][0] - minX, selection.points[0][1] - minY);
+        selection.points.slice(1).forEach((point) => {
+          cropContext.lineTo(point[0] - minX, point[1] - minY);
+        });
+        cropContext.closePath();
+        cropContext.fill();
+      }
+
+      const imageData = cropContext.getImageData(0, 0, width, height).data;
+      let hasVisiblePixel = false;
+      for (let i = 3; i < imageData.length; i += 4) {
+        if (imageData[i] > 0) {
+          hasVisiblePixel = true;
+          break;
+        }
+      }
+
+      if (!hasVisiblePixel) return null;
+
+      sourceContext.globalCompositeOperation = 'destination-out';
+      sourceContext.beginPath();
+      if (selection.points?.length >= 3) {
+        sourceContext.moveTo(selection.points[0][0], selection.points[0][1]);
+        selection.points.slice(1).forEach((point) => {
+          sourceContext.lineTo(point[0], point[1]);
+        });
+        sourceContext.closePath();
+      } else {
+        sourceContext.rect(minX, minY, width, height);
+      }
+      sourceContext.fill();
+
+      const nextBaseDataUrl = sourceCanvas.toDataURL('image/png');
+      const cropDataUrl = cropCanvas.toDataURL('image/png');
+      const [nextBaseImage, cropImage] = await Promise.all([
+        loadImageNode(nextBaseDataUrl),
+        loadImageNode(cropDataUrl),
+      ]);
+
+      if (!nextBaseImage || !cropImage) return null;
+
+      baseImageRef.current = nextBaseImage;
+
+      return {
+        type: 'image',
+        dataUrl: cropDataUrl,
+        x: minX,
+        y: minY,
+        width,
+        height,
+        imgNode: cropImage,
+        baseBeforeImgNode: baseImageNode,
+        baseAfterImgNode: nextBaseImage,
+      };
+    }, []);
+
     const drawPaperBackground = useCallback((context, rect) => {
       const backgroundImageNode = backgroundImageRef.current;
       if (backgroundImageNode) {
@@ -772,7 +869,7 @@ const DrawingScreen = forwardRef(
       [shouldDrawWithPointer, tool, createPointFromEvent, moveAction, renderHistoryToCache, queueRedraw, getCombinedBounds]
     );
 
-    const finishCurrentStroke = useCallback((event) => {
+    const finishCurrentStroke = useCallback(async (event) => {
         if (event && event.cancelable) event.preventDefault();
         if (event) event.stopPropagation();
 
@@ -834,7 +931,39 @@ const DrawingScreen = forwardRef(
               };
               renderHistoryToCache();
             } else {
-              selectionRef.current = null;
+              const pixelAction = await createPixelSelectionAction(draft);
+
+              if (pixelAction) {
+                const nextIndex = historyRef.current.length;
+                historyRef.current = [...historyRef.current, pixelAction];
+                redoHistoryRef.current = [];
+                selectionRef.current = {
+                  mode: draft.mode,
+                  points:
+                    draft.mode === 'rect'
+                      ? [
+                          [pixelAction.x, pixelAction.y, 0.5],
+                          [pixelAction.x + pixelAction.width, pixelAction.y, 0.5],
+                          [
+                            pixelAction.x + pixelAction.width,
+                            pixelAction.y + pixelAction.height,
+                            0.5,
+                          ],
+                          [pixelAction.x, pixelAction.y + pixelAction.height, 0.5],
+                        ]
+                      : draft.points,
+                  bounds: {
+                    minX: pixelAction.x,
+                    minY: pixelAction.y,
+                    maxX: pixelAction.x + pixelAction.width,
+                    maxY: pixelAction.y + pixelAction.height,
+                  },
+                  indexes: [nextIndex],
+                };
+                renderHistoryToCache();
+              } else {
+                selectionRef.current = null;
+              }
             }
           }
 
@@ -859,7 +988,15 @@ const DrawingScreen = forwardRef(
         renderHistoryToCache();
         redrawCanvas();
       },
-      [tool, splitActionBySelection, getCombinedBounds, renderHistoryToCache, redrawCanvas, updateStatus]
+      [
+        tool,
+        splitActionBySelection,
+        getCombinedBounds,
+        renderHistoryToCache,
+        redrawCanvas,
+        updateStatus,
+        createPixelSelectionAction,
+      ]
     );
 
     useEffect(() => {
@@ -898,6 +1035,9 @@ const DrawingScreen = forwardRef(
           selectionRef.current = null;
           selectionDraftRef.current = null;
           selectionDragRef.current = null;
+          if (last.baseBeforeImgNode) {
+            baseImageRef.current = last.baseBeforeImgNode;
+          }
           redoHistoryRef.current.push(last);
           currentStrokeRef.current = null;
           renderHistoryToCache();
@@ -910,6 +1050,9 @@ const DrawingScreen = forwardRef(
           selectionRef.current = null;
           selectionDraftRef.current = null;
           selectionDragRef.current = null;
+          if (next.baseAfterImgNode) {
+            baseImageRef.current = next.baseAfterImgNode;
+          }
           historyRef.current.push(next);
           currentStrokeRef.current = null;
           renderHistoryToCache();
@@ -955,6 +1098,21 @@ const DrawingScreen = forwardRef(
           serializeSceneData(
             historyRef.current.filter((action) => action?.type === 'image'),
           ),
+        getFullSceneData: () => serializeSceneData(historyRef.current),
+        getBaseImageDataURL: () => {
+          const canvas = canvasRef.current;
+          const baseImageNode = baseImageRef.current;
+          if (!canvas || !baseImageNode) return '';
+
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = canvas.width;
+          tempCanvas.height = canvas.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.setTransform(CANVAS_SCALE, 0, 0, CANVAS_SCALE, 0, 0);
+          tempCtx.drawImage(baseImageNode, 0, 0, canvas.offsetWidth, canvas.offsetHeight);
+
+          return tempCanvas.toDataURL('image/png');
+        },
         importImageFile: async (file) => {
           const canvas = canvasRef.current;
           if (!canvas || !file) return;
