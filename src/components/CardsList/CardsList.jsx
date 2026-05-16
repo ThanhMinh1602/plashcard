@@ -701,17 +701,32 @@ export default function CardsList({
 
       saveDraftToLocal(nextCards);
 
-      await updatePackage(
-        user.uid,
-        packageItem.id,
-        packageName,
-        packageDescription,
-      );
-      await updatePackageBackground(
-        user.uid,
-        packageItem.id,
-        packageBackgroundPairId,
-      );
+      const nextName = packageName?.trim() || "";
+      const nextDescription = packageDescription?.trim() || "";
+      const nextBackgroundPairId =
+        packageBackgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID;
+
+      const oldName = packageItem?.name?.trim() || "";
+      const oldDescription = packageItem?.description?.trim() || "";
+      const oldBackgroundPairId =
+        packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID;
+
+      if (nextName !== oldName || nextDescription !== oldDescription) {
+        await updatePackage(
+          user.uid,
+          packageItem.id,
+          nextName,
+          nextDescription,
+        );
+      }
+
+      if (nextBackgroundPairId !== oldBackgroundPairId) {
+        await updatePackageBackground(
+          user.uid,
+          packageItem.id,
+          nextBackgroundPairId,
+        );
+      }
 
       const changedCards = getChangedCards(nextCards);
 
