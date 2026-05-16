@@ -43,6 +43,8 @@ export default function CardsList({
 
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [openProgress, setOpenProgress] = useState(0);
+  const [openProgressMessage, setOpenProgressMessage] = useState("");
   const [savingAll, setSavingAll] = useState(false);
   const [isBackSaving, setIsBackSaving] = useState(false);
   const [error, setError] = useState("");
@@ -60,6 +62,7 @@ export default function CardsList({
   const thumbnailListRef = useRef(null);
   const backConfirmMonkeyIndexRef = useRef(-1);
   const savedCardsSnapshotRef = useRef([]);
+  const openProgressTimerRef = useRef(null);
 
   const cardGestureAreaRef = useRef(null);
   const touchPointersRef = useRef(new Map());
@@ -428,13 +431,50 @@ export default function CardsList({
     loadCards();
   }, [user, packageItem?.id]);
 
+  useEffect(() => {
+    return () => {
+      if (openProgressTimerRef.current) {
+        clearInterval(openProgressTimerRef.current);
+      }
+    };
+  }, []);
+
   const loadCards = async () => {
     if (!user || !packageItem?.id) return;
 
     try {
       setLoading(true);
+      setOpenProgress(8);
+      setOpenProgressMessage("Đang kết nối dữ liệu bộ thẻ...");
+
+      if (openProgressTimerRef.current) {
+        clearInterval(openProgressTimerRef.current);
+      }
+
+      openProgressTimerRef.current = setInterval(() => {
+        setOpenProgress((prev) => {
+          if (prev >= 92) return prev;
+
+          const next = Math.min(
+            prev + Math.max(2, Math.round((92 - prev) / 8)),
+            92,
+          );
+
+          if (next >= 72) {
+            setOpenProgressMessage("Đang dựng không gian chỉnh sửa...");
+          } else if (next >= 38) {
+            setOpenProgressMessage("Đang chuẩn bị dữ liệu và nền thẻ...");
+          } else {
+            setOpenProgressMessage("Đang tải nội dung bộ thẻ...");
+          }
+
+          return next;
+        });
+      }, 260);
 
       const rawDocs = await getFlashcards(user.uid, packageItem.id);
+      setOpenProgress(100);
+      setOpenProgressMessage("Hoàn tất, đang mở bộ thẻ...");
 
       // Logic gộp PairId
       const pairsMap = {};
@@ -501,7 +541,13 @@ export default function CardsList({
     } catch (err) {
       setError("Lỗi tải thẻ từ Cloud");
     } finally {
+      if (openProgressTimerRef.current) {
+        clearInterval(openProgressTimerRef.current);
+        openProgressTimerRef.current = null;
+      }
       setLoading(false);
+      setOpenProgress(0);
+      setOpenProgressMessage("");
     }
   };
 
@@ -1003,6 +1049,26 @@ export default function CardsList({
           <p className='mt-2 text-sm leading-6 text-slate-500'>
             Hệ thống đang chuẩn bị dữ liệu và nền thẻ cho bộ này.
           </p>
+
+          <div className='mt-6 w-full'>
+            <div className='mb-2 flex items-center justify-between text-xs font-black text-slate-500'>
+              <span>Tiến độ tải</span>
+              <span>{openProgress}%</span>
+            </div>
+
+            <div className='relative h-1.5 overflow-hidden rounded-full bg-slate-100 shadow-inner'>
+              <div
+                className='editor-open-gradient h-full rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] shadow-[0_0_18px_rgba(59,130,246,0.35)] transition-all duration-300 ease-out'
+                style={{ width: `${openProgress}%` }}
+              />
+              <div className='pointer-events-none absolute inset-0 rounded-full ring-1 ring-white/70' />
+            </div>
+
+            <div className='mt-3 text-xs font-bold text-slate-500'>
+              {openProgressMessage ||
+                "Hệ thống đang chuẩn bị dữ liệu và nền thẻ cho bộ này."}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1297,6 +1363,13 @@ export default function CardsList({
           __html: `
             .hide-scrollbar::-webkit-scrollbar { display: none; }
             .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            @keyframes editor-open-gradient-x {
+              0%, 100% { background-position: 0% 50%; }
+              50% { background-position: 100% 50%; }
+            }
+            .editor-open-gradient {
+              animation: editor-open-gradient-x 3s ease infinite;
+            }
           `,
         }}
       />

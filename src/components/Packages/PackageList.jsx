@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Player } from "@lottiefiles/react-lottie-player";
 import { FiFolder, FiFolderPlus, FiPackage, FiTrash2 } from "react-icons/fi";
 import { BsFolder2Open, BsPlayCircle } from "react-icons/bs";
@@ -23,10 +23,21 @@ export default function PackageList({
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [studyingId, setStudyingId] = useState(null);
+  const [studyProgress, setStudyProgress] = useState(0);
+  const [studyProgressMessage, setStudyProgressMessage] = useState("");
+  const studyProgressTimerRef = useRef(null);
 
   useEffect(() => {
     loadPackages();
   }, [user]);
+
+  useEffect(() => {
+    return () => {
+      if (studyProgressTimerRef.current) {
+        clearInterval(studyProgressTimerRef.current);
+      }
+    };
+  }, []);
 
   const loadPackages = async () => {
     if (!user) return;
@@ -69,13 +80,53 @@ export default function PackageList({
 
     try {
       setStudyingId(packageItem.id);
+      setStudyProgress(8);
+      setStudyProgressMessage("Đang kết nối dữ liệu bộ thẻ...");
+
+      if (studyProgressTimerRef.current) {
+        clearInterval(studyProgressTimerRef.current);
+      }
+
+      studyProgressTimerRef.current = setInterval(() => {
+        setStudyProgress((prev) => {
+          if (prev >= 92) return prev;
+
+          const next = Math.min(
+            prev + Math.max(2, Math.round((92 - prev) / 8)),
+            92,
+          );
+
+          if (next >= 72) {
+            setStudyProgressMessage("Đang sắp xếp thẻ cho phiên học...");
+          } else if (next >= 38) {
+            setStudyProgressMessage(
+              "Đang chuẩn bị nội dung mặt trước và mặt sau...",
+            );
+          } else {
+            setStudyProgressMessage("Đang tải dữ liệu bộ thẻ...");
+          }
+
+          return next;
+        });
+      }, 260);
+
       const cards = await getFlashcards(user.uid, packageItem.id);
+      setStudyProgress(100);
+      setStudyProgressMessage("Hoàn tất, đang mở phiên học...");
+
+      await new Promise((resolve) => setTimeout(resolve, 180));
       onStudyPackage?.(packageItem, cards);
     } catch (err) {
       console.error(err);
       alert("Lỗi tải thẻ để học");
     } finally {
+      if (studyProgressTimerRef.current) {
+        clearInterval(studyProgressTimerRef.current);
+        studyProgressTimerRef.current = null;
+      }
       setStudyingId(null);
+      setStudyProgress(0);
+      setStudyProgressMessage("");
     }
   };
 
@@ -118,6 +169,26 @@ export default function PackageList({
             <p className='mt-2 text-sm leading-6 text-slate-500'>
               Hệ thống đang chuẩn bị dữ liệu để bắt đầu phiên học.
             </p>
+
+            <div className='mt-6 w-full'>
+              <div className='mb-2 flex items-center justify-between text-xs font-black text-slate-500'>
+                <span>Tiến độ tải</span>
+                <span>{studyProgress}%</span>
+              </div>
+
+              <div className='relative h-1.5 overflow-hidden rounded-full bg-slate-100 shadow-inner'>
+                <div
+                  className='package-add-gradient h-full rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] shadow-[0_0_18px_rgba(59,130,246,0.35)] transition-all duration-300 ease-out'
+                  style={{ width: `${studyProgress}%` }}
+                />
+                <div className='pointer-events-none absolute inset-0 rounded-full ring-1 ring-white/70' />
+              </div>
+
+              <div className='mt-3 text-xs font-bold text-slate-500'>
+                {studyProgressMessage ||
+                  "Hệ thống đang chuẩn bị dữ liệu để bắt đầu phiên học."}
+              </div>
+            </div>
           </div>
         </div>
       )}
