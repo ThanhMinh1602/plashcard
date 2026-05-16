@@ -7,6 +7,7 @@ import Login from '../components/Auth/Login';
 import Register from '../components/Auth/Register';
 import ForgotPassword from '../components/Auth/ForgotPassword';
 import PackageList from '../components/Packages/PackageList';
+import PackageTrash from '../components/Packages/PackageTrash';
 import CardsList from '../components/CardsList/CardsList';
 import StudyScreen from '../components/Study/StudyScreen';
 import DrawingScreen from '../components/Drawing/DrawingScreen';
@@ -65,6 +66,10 @@ export default function AppRoutes({ user }) {
     navigate('/draw');
   };
 
+  const handleOpenTrash = () => {
+    navigate('/packages/trash');
+  };
+
   const handleSaveDrawing = (imageData, strokesData) => {
     console.log('Drawing saved:', { imageData, strokesData });
     setIsDrawing(false);
@@ -119,7 +124,17 @@ export default function AppRoutes({ user }) {
               onOpenPackage={handleOpenPackage}
               onStudyPackage={handleStudyPackage}
               onDrawPackage={handleDrawPackage}
+              onOpenTrash={handleOpenTrash}
             />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/packages/trash"
+        element={
+          <ProtectedRoute user={user}>
+            <PackageTrash user={user} onBack={handleBackToPackages} />
           </ProtectedRoute>
         }
       />

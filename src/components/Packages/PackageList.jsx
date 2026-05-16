@@ -16,6 +16,7 @@ export default function PackageList({
   onOpenPackage,
   onStudyPackage,
   onDrawPackage,
+  onOpenTrash,
 }) {
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -194,7 +195,16 @@ export default function PackageList({
       )}
 
       <div className='fixed inset-x-0 top-[100px] z-50 pointer-events-none'>
-        <div className='mx-auto flex w-full max-w-7xl justify-end px-4 sm:px-6 lg:px-8'>
+        <div className='mx-auto flex w-full max-w-7xl justify-end gap-3 px-4 sm:px-6 lg:px-8'>
+          <button
+            className='pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-white/90 px-5 text-sm font-black text-rose-600 shadow-[0_14px_34px_rgba(244,63,94,0.14)] transition hover:-translate-y-0.5 hover:bg-rose-50'
+            onClick={onOpenTrash}
+            type='button'
+          >
+            <FiTrash2 size={18} />
+            <span>Thùng rác</span>
+          </button>
+
           <button
             className='package-add-gradient pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(236,72,153,0.28)]'
             onClick={onAddPackage}

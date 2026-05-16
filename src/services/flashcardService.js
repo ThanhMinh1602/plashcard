@@ -16,6 +16,10 @@ export const getPackages = async () => {
   return apiRequest('/packages');
 };
 
+export const getDeletedPackages = async () => {
+  return apiRequest('/packages/trash');
+};
+
 export const addPackage = async (_userId, name = '', description = '') => {
   const data = await apiRequest('/packages', {
     method: 'POST',
@@ -58,6 +62,18 @@ export const updatePackageBackground = async (
 
 export const deletePackage = async (_userId, packageId) => {
   await apiRequest(`/packages/${packageId}`, {
+    method: 'DELETE',
+  });
+};
+
+export const restorePackage = async (_userId, packageId) => {
+  return apiRequest(`/packages/${packageId}/restore`, {
+    method: 'PATCH',
+  });
+};
+
+export const permanentlyDeletePackage = async (_userId, packageId) => {
+  await apiRequest(`/packages/${packageId}/permanent`, {
     method: 'DELETE',
   });
 };
