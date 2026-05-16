@@ -1,17 +1,17 @@
-const backgroundModules = import.meta.glob('../assets/bgr/*.jpg', {
+const backgroundModules = import.meta.glob('../assets/bgr/*.{jpg,webp}', {
   eager: true,
   import: 'default',
 });
 
 const backgroundByNumber = Object.entries(backgroundModules).reduce(
   (acc, [path, src]) => {
-    const match = path.match(/\/(\d+)\.jpg$/);
+    const match = path.match(/\/([0-9]+)\.(?:jpg|webp)$/);
     if (match) {
       acc[Number(match[1])] = src;
     }
     return acc;
   },
-  {}
+  {},
 );
 
 export const DEFAULT_CARD_BACKGROUND_PAIR_ID = '1';
@@ -32,9 +32,7 @@ export const CARD_BACKGROUND_PAIRS = Array.from({ length: 15 }, (_, index) => {
 }).filter((pair) => pair.front && pair.back);
 
 export const getCardBackgroundPair = (backgroundPairId) => {
-  const pairId = String(
-    backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID
-  );
+  const pairId = String(backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID);
 
   return (
     CARD_BACKGROUND_PAIRS.find((pair) => pair.id === pairId) ||
