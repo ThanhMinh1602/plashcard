@@ -5,7 +5,7 @@ import savingLottie from "../../assets/lottie/sundance.json";
 import monkey1 from "../../assets/lottie/monkey1.json";
 import monkey2 from "../../assets/lottie/monkey2.json";
 import monkey3 from "../../assets/lottie/monkey3.json";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, Reorder } from "motion/react";
 import ConfirmModal from "../Common/ConfirmModal";
 import {
   getFlashcards,
@@ -13,6 +13,7 @@ import {
   updatePackage,
   updatePackageBackground,
   bulkSaveCards,
+  reorderFlashcards,
 } from "../../services/flashcardService";
 
 import CardsEditorHeader from "./CardsEditorHeader";
@@ -27,6 +28,88 @@ import {
 import usePackageEditor from "./hooks/usePackageEditor";
 import useCanvasRegistry from "./hooks/useCanvasRegistry";
 import usePenPress from "./hooks/usePenPress";
+
+function ThumbnailReorderItem({
+  item,
+  isActive,
+  isDragging,
+  shouldWiggle,
+  isReorderMode,
+  onDragStart,
+  onDragEnd,
+  children,
+  ...props
+}) {
+  return (
+    <Reorder.Item
+      as='button'
+      value={item}
+      drag={isReorderMode ? "x" : false}
+      dragListener={isReorderMode}
+      layout
+      layoutDependency={props.layoutDependency}
+      dragSnapToOrigin
+      dragElastic={0}
+      dragMomentum={false}
+      dragTransition={{
+        power: 0,
+        timeConstant: 0,
+        bounceStiffness: 900,
+        bounceDamping: 48,
+      }}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      animate={{
+        scale: isActive || isDragging ? 1.08 : 1,
+        opacity: isReorderMode ? 1 : isActive ? 1 : 0.58,
+        rotate: shouldWiggle ? [-0.8, 0.8, -0.6, 0.6, 0] : 0,
+      }}
+      whileDrag={{
+        scale: 1.12,
+        rotate: 0,
+        opacity: 1,
+        zIndex: 60,
+        cursor: "grabbing",
+      }}
+      transition={{
+        layout: {
+          type: "spring",
+          stiffness: 1100,
+          damping: 72,
+          mass: 0.45,
+        },
+        scale: {
+          type: "spring",
+          stiffness: 620,
+          damping: 44,
+        },
+        opacity: {
+          duration: 0.12,
+        },
+        rotate: shouldWiggle
+          ? {
+              duration: 0.38,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }
+          : {
+              duration: 0.12,
+            },
+      }}
+      style={{ zIndex: isDragging ? 60 : "auto" }}
+      {...props}
+    >
+      <span
+        aria-hidden='true'
+        className={cn(
+          "pointer-events-none absolute inset-0 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50/35 transition-opacity",
+          isDragging ? "opacity-100" : "opacity-0",
+        )}
+      />
+      <span className='relative z-10 block'>{children}</span>
+    </Reorder.Item>
+  );
+}
 
 export default function CardsList({
   user,
@@ -51,6 +134,8 @@ export default function CardsList({
   const [showBackConfirm, setShowBackConfirm] = useState(false);
   const [backConfirmMonkeyIndex, setBackConfirmMonkeyIndex] = useState(0);
   const [toolbox, setToolbox] = useState(DEFAULT_TOOLBOX);
+  const [draggingCardId, setDraggingCardId] = useState(null);
+  const [isReorderMode, setIsReorderMode] = useState(false);
   const [packageBackgroundPairId, setPackageBackgroundPairId] = useState(
     packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
   );
@@ -60,6 +145,9 @@ export default function CardsList({
   const backConfirmMonkeyIndexRef = useRef(-1);
   const savedCardsSnapshotRef = useRef([]);
   const openProgressTimerRef = useRef(null);
+  const dragStartCardsRef = useRef([]);
+  const pendingReorderCardsRef = useRef([]);
+  const suppressThumbnailPressRef = useRef(false);
 
   const cardGestureAreaRef = useRef(null);
   const touchPointersRef = useRef(new Map());
@@ -216,6 +304,35 @@ export default function CardsList({
     ];
   };
 
+  const getCardOrderValue = (card, index) => {
+    const sortOrder = Number(card?.sortOrder);
+    if (Number.isFinite(sortOrder)) return sortOrder;
+
+    const createdAtTime = card?.createdAt ? new Date(card.createdAt).getTime() : NaN;
+    if (Number.isFinite(createdAtTime)) return createdAtTime;
+
+    const localCreatedAt = String(card?.localId || "").match(/^local-(\d+)/)?.[1];
+    return Number(localCreatedAt) || index;
+  };
+
+  const sortCardsBySavedOrder = (sourceCards) => {
+    return [...(sourceCards || [])].sort((a, b) => {
+      const orderDiff =
+        getCardOrderValue(a, 0) - getCardOrderValue(b, 0);
+
+      if (orderDiff !== 0) return orderDiff;
+
+      return String(a.localId || "").localeCompare(String(b.localId || ""));
+    });
+  };
+
+  const applyOrderIndexes = (sourceCards) => {
+    return (sourceCards || []).map((card, index) => ({
+      ...card,
+      sortOrder: index,
+    }));
+  };
+
   const setCardSaveStatus = (localId, status) => {
     if (!localId) return;
 
@@ -241,8 +358,8 @@ export default function CardsList({
       JSON.stringify(savedCardsSnapshotRef.current)
     );
   };
-  const getCardsWithCurrentCanvasData = () => {
-    return (cards || []).map((item) => {
+  const getCardsWithCurrentCanvasData = (sourceCards = cards) => {
+    return (sourceCards || []).map((item) => {
       const isCurrent = item.localId === currentEditId;
 
       if (!isCurrent) {
@@ -306,6 +423,9 @@ export default function CardsList({
   const toBulkCardPayload = (card) => {
     return {
       localId: card.localId,
+      sortOrder: Number.isFinite(Number(card.sortOrder))
+        ? Number(card.sortOrder)
+        : null,
       front: {
         pairId: card.localId,
         side: "front",
@@ -519,7 +639,22 @@ export default function CardsList({
           pairsMap[pId] = {
             localId: pId,
             id: pId,
+            sortOrder: doc.sortOrder ?? null,
+            createdAt: doc.createdAt || null,
+            updatedAt: doc.updatedAt || null,
           };
+        }
+
+        if (doc.sortOrder !== undefined && doc.sortOrder !== null) {
+          pairsMap[pId].sortOrder = doc.sortOrder;
+        }
+
+        if (doc.createdAt && !pairsMap[pId].createdAt) {
+          pairsMap[pId].createdAt = doc.createdAt;
+        }
+
+        if (doc.updatedAt) {
+          pairsMap[pId].updatedAt = doc.updatedAt;
         }
 
         if (doc.side === "front") {
@@ -535,7 +670,9 @@ export default function CardsList({
         }
       });
 
-      const normalized = Object.values(pairsMap).map((p) => createLocalCard(p));
+      const normalized = applyOrderIndexes(
+        sortCardsBySavedOrder(Object.values(pairsMap).map((p) => createLocalCard(p))),
+      );
 
       let finalCards = normalized;
       let finalCurrentEditId = normalized[0]?.localId || null;
@@ -569,6 +706,7 @@ export default function CardsList({
   };
 
   const handleSwitchCard = (targetId) => {
+    if (isReorderMode || suppressThumbnailPressRef.current || draggingCardId) return;
     if (currentEditId === targetId) return;
 
     const nextCards = getCardsWithCurrentCanvasData();
@@ -577,6 +715,60 @@ export default function CardsList({
     resetCardTransform();
     setCurrentEditId(targetId);
     setActiveCanvasKey(`${targetId}-front`);
+  };
+
+  const handleThumbnailDragStart = (localId) => {
+    if (!isReorderMode) return;
+    dragStartCardsRef.current = getCardsWithCurrentCanvasData();
+    pendingReorderCardsRef.current = cards;
+    suppressThumbnailPressRef.current = true;
+    setDraggingCardId(localId);
+  };
+
+  const handleThumbnailReorder = (nextOrder) => {
+    if (!isReorderMode) return;
+    const nextCards = applyOrderIndexes(nextOrder);
+    pendingReorderCardsRef.current = nextCards;
+    setCards(nextCards);
+  };
+
+  const handleThumbnailReorderCommit = async () => {
+    const reorderedCards = pendingReorderCardsRef.current;
+    setDraggingCardId(null);
+
+    requestAnimationFrame(() => {
+      setCards(applyOrderIndexes(reorderedCards || []));
+    });
+
+    window.setTimeout(() => {
+      suppressThumbnailPressRef.current = false;
+    }, 220);
+
+    if (!reorderedCards?.length || !user?.uid || !packageItem?.id) return;
+
+    const nextCards = getCardsWithCurrentCanvasData(reorderedCards);
+    const orderedLocalIds = nextCards.map((card) => card.localId).filter(Boolean);
+
+    setCards(nextCards);
+    setError("");
+    setSaveMessage("");
+
+    try {
+      await reorderFlashcards(user.uid, packageItem.id, orderedLocalIds);
+      setSaveMessage("Da luu thu tu the");
+    } catch (err) {
+      console.error(err);
+      setCards(dragStartCardsRef.current);
+      setError("Loi luu thu tu the");
+    }
+  };
+
+  const handleToggleReorderMode = () => {
+    setDraggingCardId(null);
+    suppressThumbnailPressRef.current = false;
+    pendingReorderCardsRef.current = cards;
+    dragStartCardsRef.current = cards;
+    setIsReorderMode((prev) => !prev);
   };
 
   const handleAddCardPair = () => {
@@ -589,7 +781,10 @@ export default function CardsList({
 
     const previousEditId = currentEditId;
     const nextCardsBeforeAdd = getCardsWithCurrentCanvasData();
-    const newCard = createLocalCard();
+    const newCard = createLocalCard({
+      sortOrder: nextCardsBeforeAdd.length,
+      createdAt: new Date().toISOString(),
+    });
     const nextCards = [...nextCardsBeforeAdd, newCard];
 
     setCards(nextCards);
@@ -1078,6 +1273,8 @@ export default function CardsList({
                 handleImportClick={handleImportClick}
                 handleAddCardPair={handleAddCardPair}
                 canAddCard={canAddCard}
+                isReorderMode={isReorderMode}
+                onToggleReorderMode={handleToggleReorderMode}
               />
             </div>
           </div>
@@ -1085,29 +1282,45 @@ export default function CardsList({
 
         {cards.length > 0 && (
           <div className='cards-thumbnail-strip z-30 w-full shrink-0 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-md'>
-            <div
+            <Reorder.Group
+              as='div'
               ref={thumbnailListRef}
+              axis='x'
+              layoutScroll
+              values={cards}
+              onReorder={handleThumbnailReorder}
               className='hide-scrollbar cards-thumbnail-list flex w-full items-center gap-4 overflow-x-auto px-6 py-3'
               style={{ touchAction: "pan-x" }}
               data-allow-touch
             >
               {cards.map((item) => {
                 const isActive = item.localId === currentEditId;
+                const isDragging = item.localId === draggingCardId;
+                const isReorderSelected = isDragging || (isReorderMode && isActive);
+                const shouldWiggle = isReorderMode && !isReorderSelected;
                 const saveStatus = cardSaveStatusMap[item.localId];
                 const backgroundPair = getCardBackgroundPair(
                   packageBackgroundPairId || item.backgroundPairId,
                 );
 
                 return (
-                  <button
+                  <ThumbnailReorderItem
+                    value={item}
+                    item={item}
+                    layoutDependency={cards.map((card) => card.localId).join("|")}
+                    isActive={isActive}
+                    isDragging={isDragging}
+                    isReorderMode={isReorderMode}
+                    shouldWiggle={shouldWiggle}
+                    onDragStart={() => handleThumbnailDragStart(item.localId)}
+                    onDragEnd={handleThumbnailReorderCommit}
                     key={item.localId}
                     type='button'
-                    {...bindPress(() => handleSwitchCard(item.localId))}
+                    {...bindPress(() => handleSwitchCard(item.localId), isReorderMode)}
                     className={cn(
-                      "group relative flex shrink-0 cursor-pointer flex-col items-center gap-2 transition-all duration-300 ease-out",
-                      isActive
-                        ? "scale-110 opacity-100"
-                        : "scale-100 opacity-50 hover:scale-105 hover:opacity-100",
+                      "group relative flex shrink-0 flex-col items-center gap-2 will-change-transform",
+                      isReorderMode ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+                      !isActive && !isDragging && "hover:opacity-100",
                     )}
                   >
                     <div
@@ -1175,7 +1388,7 @@ export default function CardsList({
                         </span>
                       )}
                     </div>
-                  </button>
+                  </ThumbnailReorderItem>
                 );
               })}
 
@@ -1192,7 +1405,7 @@ export default function CardsList({
               >
                 +
               </button>
-            </div>
+            </Reorder.Group>
           </div>
         )}
 

@@ -58,6 +58,10 @@ export const createLocalCard = (card = {}) => ({
   backBase: card.backBase || null,
   frontData: card.frontData || null,
   backData: card.backData || null,
+  sortOrder:
+    Number.isFinite(Number(card.sortOrder)) ? Number(card.sortOrder) : null,
+  createdAt: card.createdAt || null,
+  updatedAt: card.updatedAt || null,
   backgroundPairId:
     card.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
 });

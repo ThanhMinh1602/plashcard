@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { FiCornerUpLeft, FiCornerUpRight, FiPlus } from "react-icons/fi";
+import { FiCornerUpLeft, FiCornerUpRight, FiMove, FiPlus } from "react-icons/fi";
 import { Player } from "@lottiefiles/react-lottie-player";
 import { BRUSH_TYPES, TOOL_LIST, cn } from "./constants";
 import usePenPress from "./hooks/usePenPress";
@@ -17,6 +17,8 @@ export default function CardsEditorToolbar({
   setToolbox,
   handleAddCardPair,
   canAddCard,
+  isReorderMode,
+  onToggleReorderMode,
 }) {
   const bindPress = usePenPress();
   const isEraser = toolbox.tool === "eraser";
@@ -229,33 +231,19 @@ export default function CardsEditorToolbar({
             </span>
           </div>
 
-          <div className='flex shrink-0 items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-2 py-1'>
-            <label className='text-[9px] font-bold uppercase tracking-widest text-slate-500'>
-              Opacity
-            </label>
-
-            <input
-              type='range'
-              min='0.1'
-              max='1'
-              step='0.05'
-              value={toolbox.opacity}
-              onChange={(e) =>
-                setToolbox((prev) => ({
-                  ...prev,
-                  opacity: Number(e.target.value),
-                }))
-              }
-              disabled={isEraser || isSelect}
-              className={cn(
-                "range-soft w-24 touch-none",
-                (isEraser || isSelect) && "cursor-not-allowed opacity-30",
-              )}
-            />
-            <span className='w-[32px] text-right text-[11px] font-bold text-slate-600'>
-              {Math.round(toolbox.opacity * 100)}%
-            </span>
-          </div>
+          <button
+            type='button'
+            {...bindPress(onToggleReorderMode)}
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition touch-none",
+              isReorderMode
+                ? "border-pink-200 bg-pink-500 text-white shadow-sm"
+                : "border-slate-100 bg-slate-50 text-slate-600 hover:bg-white hover:text-sky-700",
+            )}
+          >
+            <FiMove size={15} />
+            <span>Sắp xếp thẻ</span>
+          </button>
         </div>
       </div>
     </div>

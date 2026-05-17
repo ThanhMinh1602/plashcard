@@ -85,7 +85,7 @@ const DrawingScreen = forwardRef(
 
     const shouldDrawWithPointer = useCallback(
       (event) => {
-        if (inputMode === 'stylusOnly' || inputMode === 'stylus') {
+        if (inputMode === 'stylusOnly') {
           return event.pointerType === 'pen';
         }
         return true;

@@ -94,6 +94,15 @@ export const bulkSaveCards = async (_userId, packageId, cards = []) => {
   });
 };
 
+export const reorderFlashcards = async (_userId, packageId, orderedLocalIds = []) => {
+  return apiRequest(`/packages/${packageId}/cards/reorder`, {
+    method: 'PATCH',
+    body: {
+      orderedLocalIds,
+    },
+  });
+};
+
 export const getFlashcards = async (_userId, packageId) => {
   return apiRequest(`/packages/${packageId}/cards`);
 };
