@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { FiMaximize2 } from "react-icons/fi";
+import { FiCheck, FiLoader, FiMaximize2, FiX } from "react-icons/fi";
 import { Player } from "@lottiefiles/react-lottie-player";
 import savingLottie from "../../assets/lottie/sundance.json";
 import monkey1 from "../../assets/lottie/monkey1.json";
@@ -45,6 +45,7 @@ export default function CardsList({
   const [isBackSaving, setIsBackSaving] = useState(false);
   const [error, setError] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
+  const [cardSaveStatusMap, setCardSaveStatusMap] = useState({});
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isDeletingCard, setIsDeletingCard] = useState(false);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
@@ -58,8 +59,6 @@ export default function CardsList({
   const thumbnailListRef = useRef(null);
   const backConfirmMonkeyIndexRef = useRef(-1);
   const savedCardsSnapshotRef = useRef([]);
-  const deletedCardIdsRef = useRef([]);
-  const draftHydratedRef = useRef(false);
   const openProgressTimerRef = useRef(null);
 
   const cardGestureAreaRef = useRef(null);
@@ -94,8 +93,6 @@ export default function CardsList({
     draftPackageName,
     nameError,
     headerNameInputRef,
-    setPackageName,
-    setPackageDescription,
     setDraftPackageName,
     openNameEditor,
     saveHeaderName,
@@ -103,7 +100,6 @@ export default function CardsList({
     handleHeaderNameKeyDown,
     handleDescriptionChange,
     ensurePackageName,
-    syncSavedPackageSnapshot,
   } = usePackageEditor({
     user,
     packageItem,
@@ -130,56 +126,11 @@ export default function CardsList({
   const currentCard = cards.find((c) => c.localId === currentEditId);
 
   useEffect(() => {
-    draftHydratedRef.current = false;
     setPackageBackgroundPairId(
       packageItem?.backgroundPairId || DEFAULT_CARD_BACKGROUND_PAIR_ID,
     );
   }, [packageItem?.id, packageItem?.backgroundPairId]);
-  const getDraftStorageKey = () => {
-    if (!user?.uid || !packageItem?.id) return null;
-    return `plashcard_draft_${user.uid}_${packageItem.id}`;
-  };
 
-  const saveDraftToLocal = (nextCards, extra = {}) => {
-    const key = getDraftStorageKey();
-    if (!key) return;
-
-    try {
-      localStorage.setItem(
-        key,
-        JSON.stringify({
-          cards: nextCards,
-          packageName,
-          packageDescription,
-          packageBackgroundPairId,
-          currentEditId,
-          updatedAt: Date.now(),
-          ...extra,
-        }),
-      );
-    } catch (err) {
-      console.warn("Cannot save draft to localStorage:", err);
-    }
-  };
-
-  const getDraftFromLocal = () => {
-    const key = getDraftStorageKey();
-    if (!key) return null;
-
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  };
-
-  const clearDraftLocal = () => {
-    const key = getDraftStorageKey();
-    if (!key) return;
-
-    localStorage.removeItem(key);
-  };
   const normalizeSnapshotValue = (value) => {
     if (value === null || value === undefined) return "";
     if (typeof value === "string") return value;
@@ -234,8 +185,10 @@ export default function CardsList({
         const backRef = getCanvasRefByKey(`${currentEditId}-back`);
         const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
         const backImg = backRef?.toDataURL?.({ excludeImages: true });
-        const frontData = frontRef?.getSceneData?.();
-        const backData = backRef?.getSceneData?.();
+        const frontData =
+          frontRef?.getFullSceneData?.() || frontRef?.getSceneData?.();
+        const backData =
+          backRef?.getFullSceneData?.() || backRef?.getSceneData?.();
 
         return createComparableCard(card, {
           front: frontImg || card.front,
@@ -249,6 +202,27 @@ export default function CardsList({
 
   const markCardsSnapshotSaved = (sourceCards) => {
     savedCardsSnapshotRef.current = buildSavedCardsSnapshot(sourceCards);
+  };
+
+  const markCardSnapshotsSaved = (savedCards) => {
+    const savedKeys = new Set(savedCards.map((card) => card.id || card.localId));
+    const nextSnapshots = savedCards.map((card) => createComparableCard(card));
+
+    savedCardsSnapshotRef.current = [
+      ...savedCardsSnapshotRef.current.filter(
+        (snapshot) => !savedKeys.has(snapshot.id),
+      ),
+      ...nextSnapshots,
+    ];
+  };
+
+  const setCardSaveStatus = (localId, status) => {
+    if (!localId) return;
+
+    setCardSaveStatusMap((prev) => ({
+      ...prev,
+      [localId]: status,
+    }));
   };
 
   const removeCardFromSavedSnapshot = (cardId) => {
@@ -286,11 +260,19 @@ export default function CardsList({
 
       const frontImg =
         frontRef?.toDataURL?.({ excludeImages: true }) || item.front || "";
-      const frontData = frontRef?.getSceneData?.() || item.frontData || null;
+      const frontData =
+        frontRef?.getFullSceneData?.() ||
+        frontRef?.getSceneData?.() ||
+        item.frontData ||
+        null;
 
       const backImg =
         backRef?.toDataURL?.({ excludeImages: true }) || item.back || "";
-      const backData = backRef?.getSceneData?.() || item.backData || null;
+      const backData =
+        backRef?.getFullSceneData?.() ||
+        backRef?.getSceneData?.() ||
+        item.backData ||
+        null;
 
       return {
         ...item,
@@ -345,6 +327,55 @@ export default function CardsList({
       },
     };
   };
+
+  const saveCardsInBackground = async (sourceCards, localIds) => {
+    if (!user?.uid || !packageItem?.id || !localIds?.length) return;
+
+    const localIdSet = new Set(localIds);
+    const changedCards = getChangedCards(sourceCards).filter((card) =>
+      localIdSet.has(card.localId),
+    );
+
+    if (changedCards.length === 0) {
+      localIds.forEach((localId) => setCardSaveStatus(localId, "success"));
+      return;
+    }
+
+    changedCards.forEach((card) => setCardSaveStatus(card.localId, "saving"));
+
+    try {
+      const savedResult = await bulkSaveCards(
+        user.uid,
+        packageItem.id,
+        changedCards.map(toBulkCardPayload),
+      );
+      const savedCardMap = new Map(
+        (savedResult?.cards || []).map((card) => [card.localId || card.id, card]),
+      );
+      const savedCards = changedCards.map((card) => {
+        const savedCard = savedCardMap.get(card.localId);
+        return {
+          ...card,
+          id: savedCard?.localId || savedCard?.id || card.localId,
+        };
+      });
+
+      setCards((prev) =>
+        prev.map((card) => {
+          const savedCard = savedCards.find(
+            (item) => item.localId === card.localId,
+          );
+          return savedCard ? { ...card, id: savedCard.id } : card;
+        }),
+      );
+      markCardSnapshotsSaved(savedCards);
+      changedCards.forEach((card) => setCardSaveStatus(card.localId, "success"));
+    } catch (err) {
+      console.error(err);
+      changedCards.forEach((card) => setCardSaveStatus(card.localId, "error"));
+    }
+  };
+
   const saveCurrentActiveCardData = () => {
     if (!currentEditId) return;
 
@@ -355,8 +386,10 @@ export default function CardsList({
 
     const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
     const backImg = backRef?.toDataURL?.({ excludeImages: true });
-    const frontData = frontRef?.getSceneData?.();
-    const backData = backRef?.getSceneData?.();
+    const frontData =
+      frontRef?.getFullSceneData?.() || frontRef?.getSceneData?.();
+    const backData =
+      backRef?.getFullSceneData?.() || backRef?.getSceneData?.();
 
     setCards((prev) =>
       prev.map((card) => {
@@ -506,30 +539,11 @@ export default function CardsList({
       });
 
       const normalized = Object.values(pairsMap).map((p) => createLocalCard(p));
-      const localDraft = getDraftFromLocal();
 
       let finalCards = normalized;
       let finalCurrentEditId = normalized[0]?.localId || null;
 
-      if (localDraft?.cards?.length > 0) {
-        finalCards = localDraft.cards.map((item) => createLocalCard(item));
-        finalCurrentEditId =
-          localDraft.currentEditId || finalCards[0]?.localId || null;
-
-        if (localDraft.packageBackgroundPairId) {
-          setPackageBackgroundPairId(localDraft.packageBackgroundPairId);
-        }
-
-        if (localDraft.packageName !== undefined) {
-          setPackageName(localDraft.packageName || "");
-        }
-
-        if (localDraft.packageDescription !== undefined) {
-          setPackageDescription(localDraft.packageDescription || "");
-        }
-
-        setSaveMessage("Đã khôi phục bản nháp chưa lưu trên máy");
-      } else if (
+      if (
         !packageItem?.backgroundPairId &&
         normalized[0]?.backgroundPairId
       ) {
@@ -538,11 +552,7 @@ export default function CardsList({
 
       setCards(finalCards);
 
-      if (localDraft?.cards?.length > 0) {
-        savedCardsSnapshotRef.current = buildSavedCardsSnapshot(normalized);
-      } else {
-        markCardsSnapshotSaved(finalCards);
-      }
+      markCardsSnapshotSaved(finalCards);
 
       if (finalCurrentEditId) {
         setCurrentEditId(finalCurrentEditId);
@@ -551,7 +561,6 @@ export default function CardsList({
     } catch (err) {
       setError("Lỗi tải thẻ từ Cloud");
     } finally {
-      draftHydratedRef.current = true;
       if (openProgressTimerRef.current) {
         clearInterval(openProgressTimerRef.current);
         openProgressTimerRef.current = null;
@@ -562,81 +571,11 @@ export default function CardsList({
     }
   };
 
-  const getCardsWithCurrentCanvasLocalDraft = () => {
-    return (cards || []).map((item) => {
-      const isCurrent = item.localId === currentEditId;
-
-      if (!isCurrent) {
-        return {
-          ...item,
-          backgroundPairId:
-            packageBackgroundPairId ||
-            item.backgroundPairId ||
-            DEFAULT_CARD_BACKGROUND_PAIR_ID,
-        };
-      }
-
-      const frontRef = getCanvasRefByKey(`${item.localId}-front`);
-      const backRef = getCanvasRefByKey(`${item.localId}-back`);
-
-      const frontImg =
-        frontRef?.toDataURL?.({ excludeImages: true }) || item.front || "";
-      const frontBase =
-        frontRef?.getBaseImageDataURL?.() ||
-        item.frontBase ||
-        item.front ||
-        null;
-      const backImg =
-        backRef?.toDataURL?.({ excludeImages: true }) || item.back || "";
-      const backBase =
-        backRef?.getBaseImageDataURL?.() ||
-        item.backBase ||
-        item.back ||
-        null;
-      const frontData =
-        frontRef?.getFullSceneData?.() ||
-        frontRef?.getSceneData?.() ||
-        item.frontData ||
-        null;
-      const backData =
-        backRef?.getFullSceneData?.() ||
-        backRef?.getSceneData?.() ||
-        item.backData ||
-        null;
-
-      return {
-        ...item,
-        front: frontImg,
-        back: backImg,
-        frontBase,
-        backBase,
-        frontData,
-        backData,
-        backgroundPairId:
-          packageBackgroundPairId ||
-          item.backgroundPairId ||
-          DEFAULT_CARD_BACKGROUND_PAIR_ID,
-      };
-    });
-  };
-
-  useEffect(() => {
-    if (!draftHydratedRef.current || loading) return;
-
-    saveDraftToLocal(getCardsWithCurrentCanvasLocalDraft(), {
-      packageName,
-      packageDescription,
-    });
-  }, [packageName, packageDescription]);
-
   const handleSwitchCard = (targetId) => {
     if (currentEditId === targetId) return;
 
     const nextCards = getCardsWithCurrentCanvasData();
-    const localDraftCards = getCardsWithCurrentCanvasLocalDraft();
-
-    setCards(localDraftCards);
-    saveDraftToLocal(localDraftCards);
+    setCards(nextCards);
 
     resetCardTransform();
     setCurrentEditId(targetId);
@@ -647,32 +586,23 @@ export default function CardsList({
     setError("");
     setSaveMessage("");
 
-    if (!ensurePackageName("Bạn phải nhập tên gói trước khi thêm thẻ")) {
+    if (!ensurePackageName("Ban phai nhap ten goi truoc khi them the")) {
       return;
     }
 
+    const previousEditId = currentEditId;
     const nextCardsBeforeAdd = getCardsWithCurrentCanvasData();
-    const localDraftCardsBeforeAdd = getCardsWithCurrentCanvasLocalDraft();
-    const changedCards = getChangedCards(nextCardsBeforeAdd);
-
-    setCards(localDraftCardsBeforeAdd);
-    saveDraftToLocal(localDraftCardsBeforeAdd);
-    resetCardTransform();
-
     const newCard = createLocalCard();
+    const nextCards = [...nextCardsBeforeAdd, newCard];
 
-    setCards((prev) => {
-      const next = [...prev, newCard];
-
-      saveDraftToLocal(next, {
-        currentEditId: newCard.localId,
-      });
-
-      return next;
-    });
-
+    setCards(nextCards);
+    resetCardTransform();
     setCurrentEditId(newCard.localId);
     setActiveCanvasKey(`${newCard.localId}-front`);
+
+    if (previousEditId) {
+      void saveCardsInBackground(nextCardsBeforeAdd, [previousEditId]);
+    }
 
     setTimeout(() => {
       if (thumbnailListRef.current) {
@@ -683,12 +613,11 @@ export default function CardsList({
       }
     }, 100);
   };
-
   const handleDeleteCardPair = (localId) => {
     setDeleteTargetId(localId);
   };
 
-  const handleBackgroundPairChange = (backgroundPairId) => {
+  const handleBackgroundPairChange = async (backgroundPairId) => {
     setError("");
     setSaveMessage("");
     setPackageBackgroundPairId(backgroundPairId);
@@ -699,14 +628,20 @@ export default function CardsList({
     }));
 
     setCards(nextCards);
-    saveDraftToLocal(nextCards, {
-      packageBackgroundPairId: backgroundPairId,
-    });
 
     onPackageUpdated?.({
       ...packageItem,
       backgroundPairId,
     });
+
+    if (!user?.uid || !packageItem?.id) return;
+
+    try {
+      await updatePackageBackground(user.uid, packageItem.id, backgroundPairId);
+    } catch (err) {
+      console.error(err);
+      setError("Lá»—i lÆ°u ná»n chung cá»§a gÃ³i");
+    }
   };
 
   const handleConfirmDeleteCard = async () => {
@@ -724,8 +659,8 @@ export default function CardsList({
     try {
       setIsDeletingCard(true);
 
-      if (target.id && !deletedCardIdsRef.current.includes(target.id)) {
-        deletedCardIdsRef.current.push(target.id);
+      if (target.id && user?.uid && packageItem?.id) {
+        await deleteFlashcard(user.uid, packageItem.id, target.id);
       }
 
       removeCardFromSavedSnapshot(target.id);
@@ -735,7 +670,6 @@ export default function CardsList({
       const nextCards = cards.filter((item) => item.localId !== localId);
 
       setCards(nextCards);
-      saveDraftToLocal(nextCards);
 
       if (currentEditId === localId) {
         if (nextCards.length > 0) {
@@ -786,9 +720,6 @@ export default function CardsList({
       setSaveMessage("");
 
       const nextCards = getCardsWithCurrentCanvasData();
-      const localDraftCards = getCardsWithCurrentCanvasLocalDraft();
-
-      saveDraftToLocal(localDraftCards);
 
       const nextName = packageName?.trim() || "";
       const nextDescription = packageDescription?.trim() || "";
@@ -817,24 +748,11 @@ export default function CardsList({
         );
       }
 
-      const deletedCount = deletedCardIdsRef.current.length;
-
-      if (deletedCount > 0) {
-        await Promise.all(
-          deletedCardIdsRef.current.map((cardId) =>
-            deleteFlashcard(user.uid, packageItem.id, cardId),
-          ),
-        );
-        deletedCardIdsRef.current = [];
-      }
-
       const changedCards = getChangedCards(nextCards);
 
       if (changedCards.length === 0) {
         setCards(nextCards);
         markCardsSnapshotSaved(nextCards);
-        clearDraftLocal();
-
         if (showMessage) {
           setSaveMessage("Không có thay đổi mới cần lưu");
         }
@@ -842,15 +760,26 @@ export default function CardsList({
         return true;
       }
 
-      await bulkSaveCards(
+      const savedResult = await bulkSaveCards(
         user.uid,
         packageItem.id,
         changedCards.map(toBulkCardPayload),
       );
+      const savedCardMap = new Map(
+        (savedResult?.cards || []).map((card) => [card.localId || card.id, card]),
+      );
+      const savedNextCards = nextCards.map((card) => {
+        const savedCard = savedCardMap.get(card.localId);
+        return savedCard
+          ? {
+              ...card,
+              id: savedCard.localId || savedCard.id || card.localId,
+            }
+          : card;
+      });
 
-      setCards(nextCards);
-      markCardsSnapshotSaved(nextCards);
-      clearDraftLocal();
+      setCards(savedNextCards);
+      markCardsSnapshotSaved(savedNextCards);
 
       if (showMessage) {
         setSaveMessage(`Đã lưu ${changedCards.length} thẻ thay đổi`);
@@ -859,9 +788,7 @@ export default function CardsList({
       return true;
     } catch (err) {
       console.error(err);
-      setError(
-        "Lỗi lưu thẻ. Bản nháp vẫn được giữ trên máy để tránh mất dữ liệu",
-      );
+      setError("Lỗi lưu thẻ lên server");
       return false;
     } finally {
       setSavingAll(false);
@@ -899,10 +826,11 @@ export default function CardsList({
     }
 
     if (hasUnsavedCardChanges(currentSnapshot)) {
-      const nextCards = getCardsWithCurrentCanvasData();
-      const localDraftCards = getCardsWithCurrentCanvasLocalDraft();
-      setCards(nextCards);
-      saveDraftToLocal(localDraftCards);
+      setIsBackSaving(true);
+      const saved = await saveAllCards({ showMessage: false });
+      setIsBackSaving(false);
+
+      if (!saved) return;
     }
 
     onBack?.();
@@ -1175,6 +1103,7 @@ export default function CardsList({
             >
               {cards.map((item) => {
                 const isActive = item.localId === currentEditId;
+                const saveStatus = cardSaveStatusMap[item.localId];
                 const backgroundPair = getCardBackgroundPair(
                   packageBackgroundPairId || item.backgroundPairId,
                 );
@@ -1230,6 +1159,31 @@ export default function CardsList({
                           />
                         )}
                       </div>
+
+                      {saveStatus && (
+                        <span
+                          className={cn(
+                            "absolute right-1 top-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/80 shadow-sm",
+                            saveStatus === "saving" && "bg-white text-sky-500",
+                            saveStatus === "success" &&
+                              "bg-emerald-500 text-white",
+                            saveStatus === "error" && "bg-rose-500 text-white",
+                          )}
+                          title={
+                            saveStatus === "saving"
+                              ? "Đang lưu"
+                              : saveStatus === "success"
+                                ? "Đã lưu"
+                                : "Lưu thất bại"
+                          }
+                        >
+                          {saveStatus === "saving" && (
+                            <FiLoader size={12} className='animate-spin' />
+                          )}
+                          {saveStatus === "success" && <FiCheck size={12} />}
+                          {saveStatus === "error" && <FiX size={12} />}
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
