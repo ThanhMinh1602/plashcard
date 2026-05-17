@@ -102,15 +102,6 @@ export default function CardsEditorHeader({
 
             <div className="h-4 w-px bg-slate-200" />
           </div>
-
-          <div
-            className={cn(
-              'hidden sm:inline-flex h-9 items-center rounded-lg bg-sky-50 px-3 text-xs font-bold uppercase tracking-wider text-sky-600'
-            )}
-          >
-            Bản nháp local
-          </div>
-
           <button
             type="button"
             {...bindPress(handleSaveAll, savingAll)}

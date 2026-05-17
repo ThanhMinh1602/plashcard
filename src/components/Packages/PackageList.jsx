@@ -1,11 +1,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Player } from "@lottiefiles/react-lottie-player";
-import { FiFolder, FiFolderPlus, FiPackage, FiTrash2 } from "react-icons/fi";
+import {
+  FiDownload,
+  FiFolder,
+  FiFolderPlus,
+  FiPackage,
+  FiTrash2,
+  FiUpload,
+} from "react-icons/fi";
 import { BsFolder2Open, BsPlayCircle } from "react-icons/bs";
 import {
+  addPackage,
+  bulkSaveCards,
   deletePackage,
   getFlashcards,
   getPackages,
+  updatePackageBackground,
 } from '../../services/flashcardService';
 import { syncFirebaseCardsToApi } from '../../services/firebaseToApiSyncService';
 import ConfirmModal from "../Common/ConfirmModal";
@@ -27,7 +37,12 @@ export default function PackageList({
   const [studyProgress, setStudyProgress] = useState(0);
   const [studyProgressMessage, setStudyProgressMessage] = useState("");
   const studyProgressTimerRef = useRef(null);
+  const importInputRef = useRef(null);
   const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exportingId, setExportingId] = useState(null);
+  const [transferTask, setTransferTask] = useState(null);
+  const cancelTransferRef = useRef(false);
 
   useEffect(() => {
     loadPackages();
@@ -102,6 +117,285 @@ export default function PackageList({
       alert("Lỗi xóa gói");
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const safeFileName = (value) => {
+    return String(value || "flashcard-package")
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, "-")
+      .replace(/\s+/g, "-")
+      .slice(0, 80) || "flashcard-package";
+  };
+
+  const downloadJsonFile = (fileName, data) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const cancelTransfer = () => {
+    cancelTransferRef.current = true;
+    setTransferTask((prev) =>
+      prev
+        ? {
+            ...prev,
+            message: "Dang huy thao tac...",
+            cancelling: true,
+          }
+        : prev,
+    );
+  };
+
+  const assertTransferNotCancelled = () => {
+    if (cancelTransferRef.current) {
+      throw new Error("TRANSFER_CANCELLED");
+    }
+  };
+
+  const handleExportPackage = async (packageItem, event) => {
+    event?.stopPropagation();
+    if (!user || !packageItem?.id) return;
+
+    try {
+      setExportingId(packageItem.id);
+      cancelTransferRef.current = false;
+      setTransferTask({
+        type: "export",
+        title: "Dang export data",
+        message: "Dang tai toan bo the trong goi...",
+        progress: 18,
+        cancelling: false,
+      });
+      const cards = await getFlashcards(user.uid, packageItem.id);
+      assertTransferNotCancelled();
+      setTransferTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              message: "Dang dong goi file JSON...",
+              progress: 72,
+            }
+          : prev,
+      );
+      const payload = {
+        schema: "plashcard-package-export",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        package: {
+          name: packageItem.name || "",
+          description: packageItem.description || "",
+          backgroundPairId: packageItem.backgroundPairId || "1",
+        },
+        cards,
+      };
+
+      downloadJsonFile(
+        `${safeFileName(packageItem.name || packageItem.id)}.json`,
+        payload,
+      );
+      setTransferTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              message: "Export hoan tat",
+              progress: 100,
+            }
+          : prev,
+      );
+    } catch (err) {
+      if (err?.message === "TRANSFER_CANCELLED") return;
+      console.error(err);
+      alert("Lỗi export data gói");
+    } finally {
+      setExportingId(null);
+      setTimeout(() => {
+        setTransferTask(null);
+        cancelTransferRef.current = false;
+      }, 300);
+    }
+  };
+
+  const getImportCardPairs = (payload) => {
+    const rawCards = Array.isArray(payload?.cards)
+      ? payload.cards
+      : Array.isArray(payload)
+        ? payload
+        : [];
+
+    const pairsMap = {};
+
+    rawCards.forEach((card) => {
+      const pairId =
+        card.pairId ||
+        card.localId ||
+        String(card.id || "").replace(/_(front|back)$/i, "");
+
+      if (!pairId) return;
+
+      if (!pairsMap[pairId]) {
+        pairsMap[pairId] = {
+          localId: pairId,
+          front: null,
+          back: null,
+        };
+      }
+
+      if (card.front || card.back) {
+        pairsMap[pairId].front = card.front || pairsMap[pairId].front;
+        pairsMap[pairId].back = card.back || pairsMap[pairId].back;
+        return;
+      }
+
+      const side = card.side === "back" ? "back" : "front";
+      pairsMap[pairId][side] = {
+        pairId,
+        side,
+        content: card.content || "",
+        canvasData: card.canvasData || null,
+      };
+    });
+
+    return Object.values(pairsMap).map((pair) => ({
+      localId: pair.localId,
+      front: pair.front || {
+        pairId: pair.localId,
+        side: "front",
+        content: "",
+        canvasData: null,
+      },
+      back: pair.back || {
+        pairId: pair.localId,
+        side: "back",
+        content: "",
+        canvasData: null,
+      },
+    }));
+  };
+
+  const handleImportClick = () => {
+    importInputRef.current?.click();
+  };
+
+  const handleImportChange = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !user) return;
+    let newPackageId = null;
+
+    try {
+      setImporting(true);
+      setError("");
+      cancelTransferRef.current = false;
+      setTransferTask({
+        type: "import",
+        title: "Đang nhập data",
+        message: "Đang đọc file JSON...",
+        progress: 10,
+        cancelling: false,
+      });
+
+      const text = await file.text();
+      assertTransferNotCancelled();
+      const payload = JSON.parse(text);
+      const packageData = payload?.package || {};
+      const importedPairs = getImportCardPairs(payload);
+      const packageName =
+        packageData.name || file.name.replace(/\.json$/i, "") || "Imported package";
+      const packageDescription = packageData.description || "";
+      const backgroundPairId = packageData.backgroundPairId || "1";
+      setTransferTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              message: "Dang tao goi moi...",
+              progress: 28,
+            }
+          : prev,
+      );
+
+      newPackageId = await addPackage(
+        user.uid,
+        `${packageName} (import)`,
+        packageDescription,
+      );
+      assertTransferNotCancelled();
+
+      setTransferTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              message: "Dang luu nen goi...",
+              progress: 45,
+            }
+          : prev,
+      );
+
+      await updatePackageBackground(user.uid, newPackageId, backgroundPairId);
+      assertTransferNotCancelled();
+
+      if (importedPairs.length > 0) {
+        setTransferTask((prev) =>
+          prev
+            ? {
+                ...prev,
+                message: `Dang import ${importedPairs.length} the...`,
+                progress: 68,
+              }
+            : prev,
+        );
+        await bulkSaveCards(user.uid, newPackageId, importedPairs);
+        assertTransferNotCancelled();
+      }
+
+      setTransferTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              message: "Dang lam moi danh sach goi...",
+              progress: 90,
+            }
+          : prev,
+      );
+      await loadPackages();
+      assertTransferNotCancelled();
+      setTransferTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              message: "Import hoan tat",
+              progress: 100,
+            }
+          : prev,
+      );
+    } catch (err) {
+      if (err?.message === "TRANSFER_CANCELLED") {
+        if (newPackageId) {
+          try {
+            await deletePackage(user.uid, newPackageId);
+            await loadPackages();
+          } catch (cleanupErr) {
+            console.error(cleanupErr);
+          }
+        }
+        return;
+      }
+      console.error(err);
+      alert("Lỗi import data gói. Hãy kiểm tra file JSON.");
+    } finally {
+      setImporting(false);
+      setTimeout(() => {
+        setTransferTask(null);
+        cancelTransferRef.current = false;
+      }, 300);
     }
   };
 
@@ -223,8 +517,73 @@ export default function PackageList({
         </div>
       )}
 
+      {transferTask && (
+        <div className='fixed inset-0 z-[10000] flex items-center justify-center bg-slate-900/35 px-4 backdrop-blur-sm'>
+          <div className='flex w-full max-w-sm flex-col items-center rounded-[28px] bg-white px-6 py-7 text-center shadow-[0_24px_80px_rgba(15,23,42,0.25)]'>
+            <div className='mb-4 h-24 w-24'>
+              <Player
+                autoplay
+                loop
+                src={loadingLottie}
+                className='h-full w-full'
+              />
+            </div>
+
+            <h3 className='text-lg font-black text-slate-800'>
+              {transferTask.title}
+            </h3>
+
+            <p className='mt-2 text-sm leading-6 text-slate-500'>
+              {transferTask.message}
+            </p>
+
+            <div className='mt-6 w-full'>
+              <div className='mb-2 flex items-center justify-between text-xs font-black text-slate-500'>
+                <span>Tien do</span>
+                <span>{transferTask.progress}%</span>
+              </div>
+
+              <div className='relative h-1.5 overflow-hidden rounded-full bg-slate-100 shadow-inner'>
+                <div
+                  className='package-add-gradient h-full rounded-full bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] shadow-[0_0_18px_rgba(59,130,246,0.35)] transition-all duration-300 ease-out'
+                  style={{ width: `${transferTask.progress}%` }}
+                />
+                <div className='pointer-events-none absolute inset-0 rounded-full ring-1 ring-white/70' />
+              </div>
+            </div>
+
+            <button
+              type='button'
+              onClick={cancelTransfer}
+              disabled={transferTask.cancelling}
+              className='mt-6 inline-flex h-10 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 px-5 text-sm font-black text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60'
+            >
+              {transferTask.cancelling ? "Dang huy..." : "Huy"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <input
+        ref={importInputRef}
+        type='file'
+        accept='application/json,.json'
+        className='hidden'
+        onChange={handleImportChange}
+      />
+
       <div className='fixed inset-x-0 top-[100px] z-30 pointer-events-none'>
-        <div className='mx-auto flex w-full max-w-7xl justify-end px-4 sm:px-6 lg:px-8'>
+        <div className='mx-auto flex w-full max-w-7xl justify-end gap-3 px-4 sm:px-6 lg:px-8'>
+          <button
+            className='pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-5 text-sm font-black text-sky-700 shadow-[0_16px_38px_rgba(59,130,246,0.14)] transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
+            onClick={handleImportClick}
+            disabled={importing || Boolean(transferTask)}
+            type='button'
+          >
+            <FiUpload size={18} />
+            <span>{importing ? "Đang nhập..." : "Nhập data"}</span>
+          </button>
+
           <button
             className='package-add-gradient pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(236,72,153,0.28)]'
             onClick={onAddPackage}
@@ -312,8 +671,20 @@ export default function PackageList({
                       <FiFolder size={22} />
                     </div>
 
-                    <div className='rounded-full border border-slate-100 bg-white/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 shadow-sm'>
-                      #{index + 1}
+                    <div className='flex items-center gap-2'>
+                      <button
+                        type='button'
+                        className='inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-100 bg-white/90 text-sky-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
+                        title='Export data'
+                        disabled={exportingId === item.id || Boolean(transferTask)}
+                        onClick={(e) => handleExportPackage(item, e)}
+                      >
+                        <FiDownload size={14} />
+                      </button>
+
+                      <div className='rounded-full border border-slate-100 bg-white/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 shadow-sm'>
+                        #{index + 1}
+                      </div>
                     </div>
                   </div>
 
