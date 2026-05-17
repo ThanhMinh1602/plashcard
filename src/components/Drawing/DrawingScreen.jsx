@@ -672,7 +672,9 @@ const DrawingScreen = forwardRef(
         if (!mounted) return;
 
         baseImageRef.current = baseImageNode;
-        historyRef.current = hydrated;
+        historyRef.current = baseImageNode
+          ? hydrated.filter((action) => action?.type === 'image')
+          : hydrated;
         redoHistoryRef.current = [];
         currentStrokeRef.current = null;
         renderHistoryToCache();

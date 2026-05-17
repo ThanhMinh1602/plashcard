@@ -185,10 +185,8 @@ export default function CardsList({
         const backRef = getCanvasRefByKey(`${currentEditId}-back`);
         const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
         const backImg = backRef?.toDataURL?.({ excludeImages: true });
-        const frontData =
-          frontRef?.getFullSceneData?.() || frontRef?.getSceneData?.();
-        const backData =
-          backRef?.getFullSceneData?.() || backRef?.getSceneData?.();
+        const frontData = frontRef?.getSceneData?.();
+        const backData = backRef?.getSceneData?.();
 
         return createComparableCard(card, {
           front: frontImg || card.front,
@@ -260,19 +258,11 @@ export default function CardsList({
 
       const frontImg =
         frontRef?.toDataURL?.({ excludeImages: true }) || item.front || "";
-      const frontData =
-        frontRef?.getFullSceneData?.() ||
-        frontRef?.getSceneData?.() ||
-        item.frontData ||
-        null;
+      const frontData = frontRef?.getSceneData?.() || item.frontData || null;
 
       const backImg =
         backRef?.toDataURL?.({ excludeImages: true }) || item.back || "";
-      const backData =
-        backRef?.getFullSceneData?.() ||
-        backRef?.getSceneData?.() ||
-        item.backData ||
-        null;
+      const backData = backRef?.getSceneData?.() || item.backData || null;
 
       return {
         ...item,
@@ -386,10 +376,8 @@ export default function CardsList({
 
     const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
     const backImg = backRef?.toDataURL?.({ excludeImages: true });
-    const frontData =
-      frontRef?.getFullSceneData?.() || frontRef?.getSceneData?.();
-    const backData =
-      backRef?.getFullSceneData?.() || backRef?.getSceneData?.();
+    const frontData = frontRef?.getSceneData?.();
+    const backData = backRef?.getSceneData?.();
 
     setCards((prev) =>
       prev.map((card) => {

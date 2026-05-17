@@ -6,7 +6,8 @@ import {
   deletePackage,
   getFlashcards,
   getPackages,
-} from "../../services/flashcardService";
+} from '../../services/flashcardService';
+import { syncFirebaseCardsToApi } from '../../services/firebaseToApiSyncService';
 import ConfirmModal from "../Common/ConfirmModal";
 import loadingLottie from "../../assets/lottie/sundance.json";
 
@@ -26,6 +27,7 @@ export default function PackageList({
   const [studyProgress, setStudyProgress] = useState(0);
   const [studyProgressMessage, setStudyProgressMessage] = useState("");
   const studyProgressTimerRef = useRef(null);
+  const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
 
   useEffect(() => {
     loadPackages();
@@ -54,7 +56,35 @@ export default function PackageList({
       setLoading(false);
     }
   };
+  const handleSyncFirebaseToApi = async () => {
+    if (!user) return;
 
+    const ok = window.confirm(
+      'Bạn có chắc muốn sync data Firebase cũ sang API mới không? Nút này chỉ dùng tạm để migrate data.',
+    );
+
+    if (!ok) return;
+
+    try {
+      setIsSyncingFirebase(true);
+      setError('');
+
+      const result = await syncFirebaseCardsToApi({
+        currentUser: user,
+      });
+
+      alert(
+        `Sync thành công!\nPackage: ${result.packageCount}\nCard side: ${result.cardSideCount}`,
+      );
+
+      await loadPackages();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Lỗi sync Firebase sang API');
+    } finally {
+      setIsSyncingFirebase(false);
+    }
+  };
   const handleDeleteClick = (packageItem) => {
     setDeleteTarget(packageItem);
   };
@@ -205,7 +235,24 @@ export default function PackageList({
           </button>
         </div>
       </div>
-
+      <button
+        type="button"
+        onClick={handleSyncFirebaseToApi}
+        disabled={isSyncingFirebase}
+        style={{
+          marginLeft: 12,
+          padding: '10px 14px',
+          borderRadius: 12,
+          border: 'none',
+          cursor: isSyncingFirebase ? 'not-allowed' : 'pointer',
+          background: 'linear-gradient(135deg, #ef4444, #f97316)',
+          color: '#fff',
+          fontWeight: 700,
+          opacity: isSyncingFirebase ? 0.6 : 1,
+        }}
+      >
+        {isSyncingFirebase ? 'Đang sync...' : 'Sync Firebase cũ'}
+      </button>
       <div className='mx-auto w-full max-w-7xl px-4 pt-20 pb-6 sm:px-6 lg:px-8'>
         {error && (
           <div className='mb-6 rounded-3xl border border-rose-100 bg-rose-50/90 px-5 py-4 text-sm font-semibold text-rose-600 shadow-sm'>
@@ -324,9 +371,8 @@ export default function PackageList({
       <ConfirmModal
         open={Boolean(deleteTarget)}
         title='Xóa gói này?'
-        message={`${
-          deleteTarget?.name?.trim() || "Gói chưa đặt tên"
-        } sẽ bị xóa cùng toàn bộ flashcard bên trong.`}
+        message={`${deleteTarget?.name?.trim() || "Gói chưa đặt tên"
+          } sẽ bị xóa cùng toàn bộ flashcard bên trong.`}
         confirmText='Xóa gói'
         cancelText='Hủy'
         variant='danger'
