@@ -1043,9 +1043,9 @@ export default function CardsList({
         onChange={handleImportChange}
       />
 
-      <div className='flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]'>
+      <div className='cards-editor-shell flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.34),transparent_26%),radial-gradient(circle_at_top_right,rgba(249,168,212,0.28),transparent_28%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]'>
         <div
-          className='z-40 w-full shrink-0 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl'
+          className='cards-editor-topbar z-40 w-full shrink-0 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-xl'
           style={{ touchAction: "manipulation" }}
         >
           <div className='mx-auto w-full max-w-[1500px]'>
@@ -1084,10 +1084,10 @@ export default function CardsList({
         </div>
 
         {cards.length > 0 && (
-          <div className='z-30 w-full shrink-0 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-md'>
+          <div className='cards-thumbnail-strip z-30 w-full shrink-0 border-b border-slate-200/60 bg-slate-50/50 backdrop-blur-md'>
             <div
               ref={thumbnailListRef}
-              className='hide-scrollbar flex w-full items-center gap-4 overflow-x-auto px-6 py-3'
+              className='hide-scrollbar cards-thumbnail-list flex w-full items-center gap-4 overflow-x-auto px-6 py-3'
               style={{ touchAction: "pan-x" }}
               data-allow-touch
             >
@@ -1198,7 +1198,7 @@ export default function CardsList({
 
         <div
           className={cn(
-            "relative flex w-full flex-1 justify-center overflow-hidden px-4 lg:px-8",
+            "cards-editor-stage relative flex w-full flex-1 justify-center overflow-hidden px-4 lg:px-8",
             cards.length === 0
               ? "items-center py-4"
               : "items-start pt-4 pb-4 lg:pt-6",
@@ -1223,7 +1223,7 @@ export default function CardsList({
               currentCard && (
                 <motion.div
                   key={currentEditId}
-                  className='w-[850px] max-w-full origin-top'
+                  className='cards-editor-card-wrap w-[850px] max-w-full origin-top'
                   initial={{ opacity: 0, scale: 0.1, y: -120 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.1, y: -120 }}

@@ -134,8 +134,7 @@ export default function PackageTrash({ user, onBack }) {
                     <span>Quay lại</span>
                   </button>
 
-                  <div className='inline-flex h-11 items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50/90 px-4 text-sm font-black text-sky-700 shadow-sm'>
-                    <FiTrash2 size={16} />
+                  <div className='hidden'>
                     <span>Thùng rác</span>
                   </div>
                 </div>

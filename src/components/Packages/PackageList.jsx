@@ -572,10 +572,10 @@ export default function PackageList({
         onChange={handleImportChange}
       />
 
-      <div className='fixed inset-x-0 top-[100px] z-30 pointer-events-none'>
-        <div className='mx-auto flex w-full max-w-7xl justify-end gap-3 px-4 sm:px-6 lg:px-8'>
+      <div className='package-actions-bar fixed inset-x-0 top-[100px] z-30 pointer-events-none'>
+        <div className='package-actions-inner mx-auto flex w-full max-w-7xl justify-end gap-3 px-4 sm:px-6 lg:px-8'>
           <button
-            className='pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-5 text-sm font-black text-sky-700 shadow-[0_16px_38px_rgba(59,130,246,0.14)] transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
+            className='package-import-action pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-5 text-sm font-black text-sky-700 shadow-[0_16px_38px_rgba(59,130,246,0.14)] transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
             onClick={handleImportClick}
             disabled={importing || Boolean(transferTask)}
             type='button'
@@ -585,7 +585,7 @@ export default function PackageList({
           </button>
 
           <button
-            className='package-add-gradient pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(236,72,153,0.28)]'
+            className='package-create-action package-add-gradient pointer-events-auto inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.26)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(236,72,153,0.28)]'
             onClick={onAddPackage}
             type='button'
           >
@@ -612,7 +612,17 @@ export default function PackageList({
       >
         {isSyncingFirebase ? 'Đang sync...' : 'Sync Firebase cũ'}
       </button> */}
-      <div className='mx-auto w-full max-w-7xl px-4 pt-20 pb-6 sm:px-6 lg:px-8'>
+      <div className='package-content-wrap mx-auto w-full max-w-7xl px-4 pt-20 pb-6 sm:px-6 lg:px-8'>
+        <button
+          className='package-mobile-import-card hidden w-full items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-4 py-3 text-sm font-black text-sky-700 shadow-[0_14px_34px_rgba(59,130,246,0.12)] disabled:cursor-not-allowed disabled:opacity-60'
+          onClick={handleImportClick}
+          disabled={importing || Boolean(transferTask)}
+          type='button'
+        >
+          <FiUpload size={18} />
+          <span>{importing ? "Đang nhập..." : "Nhập data"}</span>
+        </button>
+
         {error && (
           <div className='mb-6 rounded-3xl border border-rose-100 bg-rose-50/90 px-5 py-4 text-sm font-semibold text-rose-600 shadow-sm'>
             {error}
@@ -637,7 +647,7 @@ export default function PackageList({
             </p>
 
             <button
-              className='package-add-gradient relative mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_18px_40px_rgba(59,130,246,0.25)] transition hover:-translate-y-0.5'
+              className='package-empty-create-action package-add-gradient relative mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-5 text-sm font-black text-white shadow-[0_18px_40px_rgba(59,130,246,0.25)] transition hover:-translate-y-0.5'
               onClick={onAddPackage}
               type='button'
             >
@@ -674,7 +684,7 @@ export default function PackageList({
                     <div className='flex items-center gap-2'>
                       <button
                         type='button'
-                        className='inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-100 bg-white/90 text-sky-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
+                        className='package-card-export inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-100 bg-white/90 text-sky-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
                         title='Export data'
                         disabled={exportingId === item.id || Boolean(transferTask)}
                         onClick={(e) => handleExportPackage(item, e)}
@@ -702,9 +712,9 @@ export default function PackageList({
                   </p>
                 </div>
 
-                <div className='relative grid grid-cols-1 gap-2 border-t border-slate-100/80 bg-slate-50/45 px-5 py-4 sm:grid-cols-3'>
+                <div className='package-card-footer relative grid grid-cols-1 gap-2 border-t border-slate-100/80 bg-slate-50/45 px-5 py-4 sm:grid-cols-3'>
                   <button
-                    className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 px-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800'
+                    className='package-open-action inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 px-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800'
                     onClick={() => onOpenPackage(item)}
                     type='button'
                   >
@@ -725,7 +735,7 @@ export default function PackageList({
                   </button>
 
                   <button
-                    className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 text-sm font-bold text-rose-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-100'
+                    className='package-delete-action inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-3 text-sm font-bold text-rose-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-100'
                     onClick={() => handleDeleteClick(item)}
                     type='button'
                   >

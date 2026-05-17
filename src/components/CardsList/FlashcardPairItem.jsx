@@ -67,8 +67,8 @@ export default function FlashcardPairItem({
 
   return (
     <>
-      <div ref={setPairCardRef(item.localId)} className='relative'>
-        <div className='mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
+      <div ref={setPairCardRef(item.localId)} className='flashcard-pair-item relative'>
+        <div className='flashcard-pair-header mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
           <div className='flex items-center gap-3'>
             <div className='inline-flex h-11 min-w-[44px] items-center justify-center rounded-2xl bg-gradient-to-r from-sky-100 to-pink-100 px-3 text-sm font-black text-slate-700'>
               {index + 1}
@@ -125,7 +125,7 @@ export default function FlashcardPairItem({
           </div>
         </div>
 
-        <div className='grid gap-4 md:grid-cols-2'>
+        <div className='flashcard-pair-grid grid gap-4 md:grid-cols-2'>
           <div>
             <div
               onPointerDownCapture={() => setActiveCanvasKey(frontKey)}
@@ -142,7 +142,7 @@ export default function FlashcardPairItem({
                 opacity={toolbox.opacity}
                 backgroundColor={FRONT_PAPER_COLOR}
                 backgroundImage={backgroundPair.front}
-                inputMode='all'
+                inputMode='stylus'
                 paperPattern='grid'
                 paperGridSize={24}
                 paperGridColor='rgba(14, 165, 233, 0.16)'
@@ -169,7 +169,7 @@ export default function FlashcardPairItem({
                 opacity={toolbox.opacity}
                 backgroundColor={BACK_PAPER_COLOR}
                 backgroundImage={backgroundPair.back}
-                inputMode='all'
+                inputMode='stylus'
                 paperPattern='grid'
                 paperGridSize={24}
                 paperGridColor='rgba(236, 72, 153, 0.15)'

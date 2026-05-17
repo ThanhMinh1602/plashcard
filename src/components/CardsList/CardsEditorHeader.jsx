@@ -25,8 +25,8 @@ export default function CardsEditorHeader({
   const bindPress = usePenPress();
 
   return (
-    <div className="flex flex-col gap-2 px-4 py-3 md:px-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="cards-editor-header flex flex-col gap-2 px-4 py-3 md:px-5">
+      <div className="cards-editor-header-row flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <button
             type="button"
@@ -90,7 +90,7 @@ export default function CardsEditorHeader({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 text-sm">
+        <div className="cards-editor-header-actions flex shrink-0 items-center gap-3 text-sm">
           <div className="hidden items-center gap-2 md:flex">
             <span className="rounded-md bg-slate-100 px-2.5 py-1 font-medium text-slate-600">
               <span className="font-bold text-slate-800">{cardsCount}</span> thẻ

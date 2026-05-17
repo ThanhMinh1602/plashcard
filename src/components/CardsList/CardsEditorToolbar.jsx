@@ -36,9 +36,9 @@ export default function CardsEditorToolbar({
   }, [isEraser, toolbox.size, setToolbox]);
 
   return (
-    <div className='rounded-xl border border-slate-200 bg-white/50 px-3 py-1.5 shadow-sm'>
-      <div className='flex w-full flex-col gap-2 overflow-x-auto pb-0.5'>
-        <div className='flex min-w-max items-center gap-2'>
+    <div className='cards-editor-toolbar rounded-xl border border-slate-200 bg-white/50 px-3 py-1.5 shadow-sm'>
+      <div className='cards-editor-toolbar-scroll flex w-full flex-col gap-2 overflow-x-auto pb-0.5'>
+        <div className='cards-editor-toolbar-row flex min-w-max items-center gap-2'>
           <div className='flex items-center gap-1 rounded-xl border border-slate-100 bg-slate-50 p-1'>
             <button
               type='button'
@@ -165,7 +165,7 @@ export default function CardsEditorToolbar({
           </div>
         </div>
 
-        <div className='flex w-full min-w-max items-center gap-2'>
+        <div className='cards-editor-toolbar-controls flex w-full min-w-max items-center gap-2'>
           <div className='flex shrink-0 items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-2 py-1'>
             <label className='text-[9px] font-bold uppercase tracking-widest text-slate-500'>
               Color
