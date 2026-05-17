@@ -156,6 +156,56 @@ export const getFlashcards = async (userId, packageId) => {
 };
 
 // 3. Hàm xóa cặp thẻ
+const serializeExportValue = (value) => {
+  if (value?.toDate) {
+    return value.toDate().toISOString();
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(serializeExportValue);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, serializeExportValue(item)])
+    );
+  }
+
+  return value;
+};
+
+export const buildPackageExportData = async (userId, packageItem) => {
+  const cards = await getFlashcards(userId, packageItem.id);
+
+  return {
+    schema: 'plashcard-package-export',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    package: {
+      name: packageItem.name || '',
+      description: packageItem.description || '',
+      backgroundPairId: String(
+        packageItem.backgroundPairId || DEFAULT_BACKGROUND_PAIR_ID
+      ),
+    },
+    cards: cards.map((card) => {
+      const pairId =
+        card.pairId || card.localId || card.id?.replace(/_(front|back)$/, '');
+      const side = card.side || (card.id?.endsWith('_back') ? 'back' : 'front');
+
+      return serializeExportValue({
+        ...card,
+        id: card.id,
+        pairId,
+        userId,
+        packageId: packageItem.id,
+        localId: card.localId || pairId,
+        side,
+      });
+    }),
+  };
+};
+
 export const deleteFlashcardPair = async (userId, packageId, localId) => {
   try {
     const frontRef = doc(db, 'users', userId, 'packages', packageId, 'cards', `${localId}_front`);

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Player } from '@lottiefiles/react-lottie-player';
 import {
+  FiDownload,
   FiFolder,
   FiFolderPlus,
   FiPackage,
@@ -8,6 +9,7 @@ import {
 } from 'react-icons/fi';
 import { BsFolder2Open, BsPlayCircle } from 'react-icons/bs';
 import {
+  buildPackageExportData,
   deletePackage,
   getFlashcards,
   getPackages,
@@ -28,6 +30,7 @@ export default function PackageList({
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [studyingId, setStudyingId] = useState(null);
+  const [exportingId, setExportingId] = useState(null);
 
   useEffect(() => {
     loadPackages();
@@ -81,6 +84,42 @@ export default function PackageList({
       alert('Lỗi tải thẻ để học');
     } finally {
       setStudyingId(null);
+    }
+  };
+
+  const sanitizeExportFileName = (name) => {
+    const safeName = (name || 'flashcard-package')
+      .trim()
+      .replace(/[\\/:*?"<>|]+/g, '-')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    return safeName || 'flashcard-package';
+  };
+
+  const handleExportClick = async (packageItem) => {
+    if (!user) return;
+
+    try {
+      setExportingId(packageItem.id);
+      const exportData = await buildPackageExportData(user.uid, packageItem);
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: 'application/json;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${sanitizeExportFileName(packageItem.name)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('Lá»—i export dá»¯ liá»‡u gÃ³i');
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -208,7 +247,7 @@ export default function PackageList({
                   </p>
                 </div>
 
-                <div className="relative grid grid-cols-1 gap-2 border-t border-slate-100/80 bg-slate-50/45 px-5 py-4 sm:grid-cols-3">
+                <div className="relative grid grid-cols-1 gap-2 border-t border-slate-100/80 bg-slate-50/45 px-5 py-4 sm:grid-cols-4">
                   <button
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-900 px-3 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-800"
                     onClick={() => onOpenPackage(item)}
@@ -226,6 +265,16 @@ export default function PackageList({
                   >
                     <BsPlayCircle size={16} />
                     <span>{studyingId === item.id ? 'Đang tải...' : 'Học'}</span>
+                  </button>
+
+                  <button
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-sky-50 px-3 text-sm font-bold text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                    onClick={() => handleExportClick(item)}
+                    disabled={exportingId === item.id}
+                    type="button"
+                  >
+                    <FiDownload size={16} />
+                    <span>{exportingId === item.id ? 'Export...' : 'Export'}</span>
                   </button>
 
                   <button
