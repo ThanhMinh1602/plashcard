@@ -58,6 +58,7 @@ const DrawingScreen = forwardRef(
     const historyRef = useRef([]);
     const redoHistoryRef = useRef([]);
     const currentStrokeRef = useRef(null);
+    const dirtyRef = useRef(false);
     const selectionRef = useRef(null);
     const selectionDraftRef = useRef(null);
     const selectionDragRef = useRef(null);
@@ -677,6 +678,7 @@ const DrawingScreen = forwardRef(
           : hydrated;
         redoHistoryRef.current = [];
         currentStrokeRef.current = null;
+        dirtyRef.current = false;
         renderHistoryToCache();
         redrawCanvas();
         updateStatus();
@@ -884,6 +886,7 @@ const DrawingScreen = forwardRef(
           if (selectionDragRef.current) {
             redoHistoryRef.current = [];
             selectionDragRef.current = null;
+            dirtyRef.current = true;
             renderHistoryToCache();
             redrawCanvas();
             updateStatus();
@@ -939,6 +942,7 @@ const DrawingScreen = forwardRef(
                 const nextIndex = historyRef.current.length;
                 historyRef.current = [...historyRef.current, pixelAction];
                 redoHistoryRef.current = [];
+                dirtyRef.current = true;
                 selectionRef.current = {
                   mode: draft.mode,
                   points:
@@ -983,6 +987,7 @@ const DrawingScreen = forwardRef(
           if (stroke.points.length > 1) {
             historyRef.current.push({ ...stroke, points: [...stroke.points] });
             redoHistoryRef.current = [];
+            dirtyRef.current = true;
             updateStatus();
           }
         }
@@ -1042,6 +1047,7 @@ const DrawingScreen = forwardRef(
           }
           redoHistoryRef.current.push(last);
           currentStrokeRef.current = null;
+          dirtyRef.current = true;
           renderHistoryToCache();
           redrawCanvas();
           updateStatus();
@@ -1057,6 +1063,7 @@ const DrawingScreen = forwardRef(
           }
           historyRef.current.push(next);
           currentStrokeRef.current = null;
+          dirtyRef.current = true;
           renderHistoryToCache();
           redrawCanvas();
           updateStatus();
@@ -1101,6 +1108,7 @@ const DrawingScreen = forwardRef(
             historyRef.current.filter((action) => action?.type === 'image'),
           ),
         getFullSceneData: () => serializeSceneData(historyRef.current),
+        hasChanges: () => dirtyRef.current,
         getBaseImageDataURL: () => {
           const canvas = canvasRef.current;
           const baseImageNode = baseImageRef.current;
@@ -1123,6 +1131,7 @@ const DrawingScreen = forwardRef(
           historyRef.current.push(imageAction);
           redoHistoryRef.current = [];
           currentStrokeRef.current = null;
+          dirtyRef.current = true;
           renderHistoryToCache();
           redrawCanvas();
           updateStatus();

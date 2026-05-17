@@ -235,7 +235,7 @@ export default function PackageList({
           </button>
         </div>
       </div>
-      <button
+      {/* <button
         type="button"
         onClick={handleSyncFirebaseToApi}
         disabled={isSyncingFirebase}
@@ -252,7 +252,7 @@ export default function PackageList({
         }}
       >
         {isSyncingFirebase ? 'Đang sync...' : 'Sync Firebase cũ'}
-      </button>
+      </button> */}
       <div className='mx-auto w-full max-w-7xl px-4 pt-20 pb-6 sm:px-6 lg:px-8'>
         {error && (
           <div className='mb-6 rounded-3xl border border-rose-100 bg-rose-50/90 px-5 py-4 text-sm font-semibold text-rose-600 shadow-sm'>

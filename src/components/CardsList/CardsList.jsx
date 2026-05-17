@@ -149,9 +149,6 @@ export default function CardsList({
       back: normalizeSnapshotValue(override.back ?? card.back),
       frontData: normalizeSnapshotValue(override.frontData ?? card.frontData),
       backData: normalizeSnapshotValue(override.backData ?? card.backData),
-      backgroundPairId: normalizeSnapshotValue(
-        override.backgroundPairId ?? card.backgroundPairId,
-      ),
     };
   };
 
@@ -161,8 +158,7 @@ export default function CardsList({
       card.front ||
       card.back ||
       card.frontData ||
-      card.backData ||
-      card.backgroundPairId !== DEFAULT_CARD_BACKGROUND_PAIR_ID,
+      card.backData,
     );
   };
 
@@ -183,10 +179,16 @@ export default function CardsList({
 
         const frontRef = getCanvasRefByKey(`${currentEditId}-front`);
         const backRef = getCanvasRefByKey(`${currentEditId}-back`);
-        const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
-        const backImg = backRef?.toDataURL?.({ excludeImages: true });
-        const frontData = frontRef?.getSceneData?.();
-        const backData = backRef?.getSceneData?.();
+        const frontDirty = frontRef?.hasChanges?.();
+        const backDirty = backRef?.hasChanges?.();
+        const frontImg = frontDirty
+          ? frontRef?.toDataURL?.({ excludeImages: true })
+          : "";
+        const backImg = backDirty
+          ? backRef?.toDataURL?.({ excludeImages: true })
+          : "";
+        const frontData = frontDirty ? frontRef?.getSceneData?.() : "";
+        const backData = backDirty ? backRef?.getSceneData?.() : "";
 
         return createComparableCard(card, {
           front: frontImg || card.front,
@@ -255,14 +257,22 @@ export default function CardsList({
 
       const frontRef = getCanvasRefByKey(`${item.localId}-front`);
       const backRef = getCanvasRefByKey(`${item.localId}-back`);
+      const frontDirty = frontRef?.hasChanges?.();
+      const backDirty = backRef?.hasChanges?.();
 
       const frontImg =
-        frontRef?.toDataURL?.({ excludeImages: true }) || item.front || "";
-      const frontData = frontRef?.getSceneData?.() || item.frontData || null;
+        frontDirty
+          ? frontRef?.toDataURL?.({ excludeImages: true }) || item.front || ""
+          : item.front || "";
+      const frontData =
+        frontDirty ? frontRef?.getSceneData?.() || item.frontData || null : item.frontData || null;
 
       const backImg =
-        backRef?.toDataURL?.({ excludeImages: true }) || item.back || "";
-      const backData = backRef?.getSceneData?.() || item.backData || null;
+        backDirty
+          ? backRef?.toDataURL?.({ excludeImages: true }) || item.back || ""
+          : item.back || "";
+      const backData =
+        backDirty ? backRef?.getSceneData?.() || item.backData || null : item.backData || null;
 
       return {
         ...item,
@@ -294,11 +304,6 @@ export default function CardsList({
   };
 
   const toBulkCardPayload = (card) => {
-    const backgroundPairId =
-      card.backgroundPairId ||
-      packageBackgroundPairId ||
-      DEFAULT_CARD_BACKGROUND_PAIR_ID;
-
     return {
       localId: card.localId,
       front: {
@@ -306,14 +311,12 @@ export default function CardsList({
         side: "front",
         content: card.front || "",
         canvasData: card.frontData || null,
-        backgroundPairId,
       },
       back: {
         pairId: card.localId,
         side: "back",
         content: card.back || "",
         canvasData: card.backData || null,
-        backgroundPairId,
       },
     };
   };
@@ -374,10 +377,16 @@ export default function CardsList({
 
     if (!frontRef && !backRef) return;
 
-    const frontImg = frontRef?.toDataURL?.({ excludeImages: true });
-    const backImg = backRef?.toDataURL?.({ excludeImages: true });
-    const frontData = frontRef?.getSceneData?.();
-    const backData = backRef?.getSceneData?.();
+    const frontDirty = frontRef?.hasChanges?.();
+    const backDirty = backRef?.hasChanges?.();
+    const frontImg = frontDirty
+      ? frontRef?.toDataURL?.({ excludeImages: true })
+      : "";
+    const backImg = backDirty
+      ? backRef?.toDataURL?.({ excludeImages: true })
+      : "";
+    const frontData = frontDirty ? frontRef?.getSceneData?.() : "";
+    const backData = backDirty ? backRef?.getSceneData?.() : "";
 
     setCards((prev) =>
       prev.map((card) => {
@@ -609,13 +618,6 @@ export default function CardsList({
     setError("");
     setSaveMessage("");
     setPackageBackgroundPairId(backgroundPairId);
-
-    const nextCards = cards.map((card) => ({
-      ...card,
-      backgroundPairId,
-    }));
-
-    setCards(nextCards);
 
     onPackageUpdated?.({
       ...packageItem,
