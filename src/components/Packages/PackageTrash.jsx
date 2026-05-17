@@ -13,8 +13,10 @@ import {
 } from '../../services/flashcardService';
 import ConfirmModal from '../Common/ConfirmModal';
 import loadingLottie from '../../assets/lottie/sundance.json';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function PackageTrash({ user, onBack }) {
+  const { language, t } = useLanguage();
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,7 +40,7 @@ export default function PackageTrash({ user, onBack }) {
       setPackages(data);
     } catch (err) {
       console.error(err);
-      setError('Lỗi tải thùng rác');
+      setError(t('trash.loadError'));
     } finally {
       setLoading(false);
     }
@@ -54,7 +56,7 @@ export default function PackageTrash({ user, onBack }) {
       setRestoreTarget(null);
     } catch (err) {
       console.error(err);
-      alert('Lỗi khôi phục gói');
+      alert(t('trash.restoreError'));
     } finally {
       setBusyId(null);
     }
@@ -70,7 +72,7 @@ export default function PackageTrash({ user, onBack }) {
       setDeleteTarget(null);
     } catch (err) {
       console.error(err);
-      alert('Lỗi xoá vĩnh viễn gói');
+      alert(t('trash.permanentDeleteError'));
     } finally {
       setBusyId(null);
     }
@@ -91,7 +93,7 @@ export default function PackageTrash({ user, onBack }) {
       setClearTrashOpen(false);
     } catch (err) {
       console.error(err);
-      alert('Lỗi dọn thùng rác');
+      alert(t('trash.clearError'));
     } finally {
       setIsClearingTrash(false);
       setBusyId(null);
@@ -104,10 +106,10 @@ export default function PackageTrash({ user, onBack }) {
         <div className='flex w-full max-w-md flex-col items-center rounded-[32px] border border-white/70 bg-white/75 p-8 text-center shadow-[0_24px_70px_rgba(251,113,133,0.22)] backdrop-blur-2xl'>
           <Player autoplay loop src={loadingLottie} className='h-40 w-40' />
           <h3 className='mt-2 text-xl font-black text-slate-800'>
-            Đang tải thùng rác...
+            {t('trash.loadingTitle')}
           </h3>
           <p className='mt-2 text-sm font-semibold text-slate-500'>
-            Hệ thống đang lấy các gói đã xoá mềm của bạn.
+            {t('trash.loadingMessage')}
           </p>
         </div>
       </div>
@@ -131,11 +133,11 @@ export default function PackageTrash({ user, onBack }) {
                     className='inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-100 bg-white/90 px-4 text-sm font-black text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-800'
                   >
                     <FiArrowLeft size={16} />
-                    <span>Quay lại</span>
+                    <span>{t('common.back')}</span>
                   </button>
 
                   <div className='hidden'>
-                    <span>Thùng rác</span>
+                    <span>{t('common.trash')}</span>
                   </div>
                 </div>
 
@@ -148,7 +150,7 @@ export default function PackageTrash({ user, onBack }) {
                       className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-sm font-black text-rose-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
                     >
                       <FiTrash2 size={16} />
-                      <span>Dọn thùng rác</span>
+                      <span>{t('trash.clear')}</span>
                     </button>
                   )}
 
@@ -159,17 +161,16 @@ export default function PackageTrash({ user, onBack }) {
                     className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-4 text-sm font-black text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
                   >
                     <FiRefreshCcw size={16} />
-                    <span>Tải lại</span>
+                    <span>{t('common.refresh')}</span>
                   </button>
                 </div>
               </div>
 
               <h1 className='text-3xl font-black tracking-tight text-slate-900'>
-                Các gói đã xoá
+                {t('trash.title')}
               </h1>
               <p className='mt-2 max-w-2xl text-sm leading-6 text-slate-500'>
-                Gói ở đây chưa bị xoá khỏi hệ thống. Chỉ khi xoá vĩnh viễn thì
-                gói và toàn bộ thẻ bên trong mới biến mất.
+                {t('trash.subtitle')}
               </p>
             </div>
           </div>
@@ -188,11 +189,10 @@ export default function PackageTrash({ user, onBack }) {
               <FiTrash2 size={34} />
             </div>
             <h3 className='relative text-2xl font-black tracking-tight text-slate-800'>
-              Thùng rác đang trống
+              {t('trash.emptyTitle')}
             </h3>
             <p className='relative mx-auto mt-3 max-w-md text-sm leading-6 text-slate-500'>
-              Các gói bạn xoá mềm sẽ xuất hiện ở đây để có thể khôi phục hoặc
-              xoá vĩnh viễn.
+              {t('trash.emptyMessage')}
             </p>
           </div>
         ) : (
@@ -211,21 +211,23 @@ export default function PackageTrash({ user, onBack }) {
                     </div>
 
                     <div className='rounded-full border border-slate-100 bg-white/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400 shadow-sm'>
-                      Đã xoá
+                      {t('trash.deleted')}
                     </div>
                   </div>
 
                   <h3 className='line-clamp-1 text-xl font-black tracking-tight text-slate-800'>
-                    {item.name || 'Gói chưa đặt tên'}
+                    {item.name || t('common.unnamedPackage')}
                   </h3>
 
                   <p className='mt-2 min-h-[48px] line-clamp-2 text-sm leading-6 text-slate-500'>
-                    {item.description || 'Chưa có mô tả'}
+                    {item.description || t('common.noDescription')}
                   </p>
 
                   {item.deletedAt && (
                     <p className='mt-3 text-xs font-bold text-slate-400'>
-                      Xoá lúc {new Date(item.deletedAt).toLocaleString('vi-VN')}
+                      {t('trash.deletedAt', {
+                        date: new Date(item.deletedAt).toLocaleString(language),
+                      })}
                     </p>
                   )}
                 </div>
@@ -238,7 +240,7 @@ export default function PackageTrash({ user, onBack }) {
                     type='button'
                   >
                     <FiRefreshCcw size={16} />
-                    <span>Khôi phục</span>
+                    <span>{t('trash.restore')}</span>
                   </button>
 
                   <button
@@ -248,7 +250,7 @@ export default function PackageTrash({ user, onBack }) {
                     type='button'
                   >
                     <FiTrash2 size={16} />
-                    <span>Xoá hẳn</span>
+                    <span>{t('trash.permanentDelete')}</span>
                   </button>
                 </div>
               </div>
@@ -259,12 +261,12 @@ export default function PackageTrash({ user, onBack }) {
 
       <ConfirmModal
         open={Boolean(restoreTarget)}
-        title='Khôi phục gói này?'
-        message={`${
-          restoreTarget?.name?.trim() || 'Gói chưa đặt tên'
-        } sẽ quay lại màn hình danh sách gói.`}
-        confirmText='Khôi phục'
-        cancelText='Huỷ'
+        title={t('trash.restoreTitle')}
+        message={t('trash.restoreMessage', {
+          name: restoreTarget?.name?.trim() || t('common.unnamedPackage'),
+        })}
+        confirmText={t('trash.restore')}
+        cancelText={t('modal.cancel')}
         variant='warning'
         loading={Boolean(restoreTarget && busyId === restoreTarget.id)}
         onConfirm={handleRestore}
@@ -273,12 +275,12 @@ export default function PackageTrash({ user, onBack }) {
 
       <ConfirmModal
         open={Boolean(deleteTarget)}
-        title='Xoá vĩnh viễn?'
-        message={`${
-          deleteTarget?.name?.trim() || 'Gói chưa đặt tên'
-        } sẽ bị xoá thật cùng toàn bộ flashcard bên trong. Không thể khôi phục sau bước này.`}
-        confirmText='Xoá vĩnh viễn'
-        cancelText='Huỷ'
+        title={t('trash.permanentDeleteTitle')}
+        message={t('trash.permanentDeleteMessage', {
+          name: deleteTarget?.name?.trim() || t('common.unnamedPackage'),
+        })}
+        confirmText={t('trash.permanentDeleteConfirm')}
+        cancelText={t('modal.cancel')}
         variant='danger'
         loading={Boolean(deleteTarget && busyId === deleteTarget.id)}
         onConfirm={handlePermanentDelete}
@@ -287,10 +289,10 @@ export default function PackageTrash({ user, onBack }) {
 
       <ConfirmModal
         open={clearTrashOpen}
-        title='Dọn toàn bộ thùng rác?'
-        message={`Toàn bộ ${packages.length} gói trong thùng rác sẽ bị xoá vĩnh viễn cùng tất cả flashcard bên trong. Không thể khôi phục sau bước này.`}
-        confirmText='Dọn thùng rác'
-        cancelText='Huỷ'
+        title={t('trash.clearTitle')}
+        message={t('trash.clearMessage', { count: packages.length })}
+        confirmText={t('trash.clear')}
+        cancelText={t('modal.cancel')}
         variant='danger'
         loading={isClearingTrash}
         onConfirm={handleClearTrash}

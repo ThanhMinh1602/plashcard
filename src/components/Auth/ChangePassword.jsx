@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { FiArrowLeft, FiCheck, FiKey, FiLock } from 'react-icons/fi';
 import { changePassword } from '../../services/authService';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function ChangePassword({ onBack }) {
+  const { t } = useLanguage();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,17 +18,17 @@ export default function ChangePassword({ onBack }) {
     setSuccess('');
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('Vui lòng nhập đầy đủ mật khẩu');
+      setError(t('auth.fillPasswords'));
       return;
     }
 
     if (newPassword.length < 6) {
-      setError('Mật khẩu mới phải có ít nhất 6 ký tự');
+      setError(t('auth.newPasswordMin'));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Xác nhận mật khẩu mới không khớp');
+      setError(t('auth.newPasswordMismatch'));
       return;
     }
 
@@ -36,9 +38,9 @@ export default function ChangePassword({ onBack }) {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setSuccess('Đổi mật khẩu thành công');
+      setSuccess(t('auth.changePasswordSuccess'));
     } catch (err) {
-      setError(err.message || 'Lỗi đổi mật khẩu');
+      setError(err.message || t('auth.changePasswordError'));
     } finally {
       setLoading(false);
     }
@@ -57,22 +59,21 @@ export default function ChangePassword({ onBack }) {
             className='inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-100 bg-white/90 px-4 text-sm font-black text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-800'
           >
             <FiArrowLeft size={16} />
-            <span>Quay lại</span>
+            <span>{t('common.back')}</span>
           </button>
 
           <div className='inline-flex h-11 items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50/90 px-4 text-sm font-black text-sky-700 shadow-sm'>
             <FiKey size={16} />
-            <span>Đổi mật khẩu</span>
+            <span>{t('common.changePassword')}</span>
           </div>
         </div>
 
         <div className='relative'>
           <h1 className='animate-gradient-x bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] bg-clip-text text-3xl font-black tracking-tight text-transparent'>
-            Cập nhật mật khẩu
+            {t('auth.changePasswordTitle')}
           </h1>
           <p className='mt-2 text-sm leading-6 text-slate-500'>
-            Nhập mật khẩu hiện tại, mật khẩu mới và xác nhận mật khẩu mới để
-            đổi mật khẩu tài khoản.
+            {t('auth.changePasswordSubtitle')}
           </p>
         </div>
 
@@ -86,7 +87,7 @@ export default function ChangePassword({ onBack }) {
 
           <PasswordField
             id='current-password'
-            label='Mật khẩu cũ'
+            label={t('auth.currentPassword')}
             value={currentPassword}
             onChange={setCurrentPassword}
             disabled={loading}
@@ -94,7 +95,7 @@ export default function ChangePassword({ onBack }) {
 
           <PasswordField
             id='new-password'
-            label='Mật khẩu mới'
+            label={t('auth.newPassword')}
             value={newPassword}
             onChange={setNewPassword}
             disabled={loading}
@@ -102,7 +103,7 @@ export default function ChangePassword({ onBack }) {
 
           <PasswordField
             id='confirm-password'
-            label='Xác nhận mật khẩu mới'
+            label={t('auth.confirmNewPassword')}
             value={confirmPassword}
             onChange={setConfirmPassword}
             disabled={loading}
@@ -113,7 +114,7 @@ export default function ChangePassword({ onBack }) {
             disabled={loading}
             className='soft-button gradient-strong h-12 w-full rounded-2xl text-sm font-bold hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60'
           >
-            <span>{loading ? 'Đang đổi mật khẩu...' : 'Đổi mật khẩu'}</span>
+            <span>{loading ? t('auth.resettingPassword') : t('common.changePassword')}</span>
             {!loading && <FiCheck size={16} />}
           </button>
         </form>

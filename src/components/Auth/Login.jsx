@@ -1,39 +1,31 @@
 import React, { useState } from "react";
-
 import { FiArrowRight, FiLock, FiMail } from "react-icons/fi";
-
 import { loginWithEmail } from "../../services/authService";
-
+import { useLanguage } from "../../i18n/LanguageContext";
 import AuthShell from "./AuthShell";
 
 export default function Login({ onSwitch, onForgot }) {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
-
   const [password, setPassword] = useState("");
-
   const [error, setError] = useState("");
-
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-
     setError("");
-
     setLoading(true);
 
     if (!email || !password) {
-      setError("Vui lòng nhập email và mật khẩu");
-
+      setError(t("auth.fillEmailPassword"));
       setLoading(false);
-
       return;
     }
 
     try {
       await loginWithEmail(email.trim(), password);
     } catch (err) {
-      setError(err.message || "Lỗi đăng nhập");
+      setError(err.message || t("auth.loginError"));
     } finally {
       setLoading(false);
     }
@@ -41,17 +33,17 @@ export default function Login({ onSwitch, onForgot }) {
 
   return (
     <AuthShell
-      title='Welcome'
-      subtitle='Đăng nhập vào Flashcard'
+      title={t("auth.welcome")}
+      subtitle={t("auth.loginSubtitle")}
       footer={
         <p>
-          Chưa có tài khoản?
+          {t("auth.noAccount")}
           <button
             type='button'
             onClick={onSwitch}
             className='ml-2 font-semibold text-sky-600 transition hover:text-pink-500'
           >
-            Đăng ký
+            {t("auth.register")}
           </button>
         </p>
       }
@@ -72,7 +64,6 @@ export default function Login({ onSwitch, onForgot }) {
               className='pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400'
               size={16}
             />
-
             <input
               id='email'
               type='email'
@@ -91,7 +82,7 @@ export default function Login({ onSwitch, onForgot }) {
               htmlFor='password'
               className='text-xs font-bold uppercase tracking-[0.18em] text-slate-500'
             >
-              Mật khẩu
+              {t("auth.password")}
             </label>
 
             <button
@@ -99,7 +90,7 @@ export default function Login({ onSwitch, onForgot }) {
               onClick={onForgot}
               className='text-xs font-semibold text-sky-600 transition hover:text-pink-500'
             >
-              Quên mật khẩu?
+              {t("auth.forgotPassword")}
             </button>
           </div>
 
@@ -108,7 +99,6 @@ export default function Login({ onSwitch, onForgot }) {
               className='pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400'
               size={16}
             />
-
             <input
               id='password'
               type='password'
@@ -126,8 +116,7 @@ export default function Login({ onSwitch, onForgot }) {
           disabled={loading}
           className='soft-button gradient-strong h-12 w-full rounded-2xl text-sm font-bold hover:-translate-y-0.5'
         >
-          <span>{loading ? "Đang đăng nhập..." : "Đăng nhập"}</span>
-
+          <span>{loading ? t("auth.loggingIn") : t("auth.login")}</span>
           {!loading && <FiArrowRight size={16} />}
         </button>
       </form>

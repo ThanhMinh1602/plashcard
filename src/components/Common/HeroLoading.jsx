@@ -2,12 +2,17 @@ import React from 'react';
 import { Player } from '@lottiefiles/react-lottie-player';
 
 import loadingLottie from '../../assets/lottie/sun_cloud.json';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function HeroLoading({
-  title = 'Đang tải...',
-  message = 'Vui lòng chờ trong giây lát.',
+  title,
+  message,
   fullScreen = true,
 }) {
+  const { t } = useLanguage();
+  const loadingTitle = title || t('common.loading');
+  const loadingMessage = message || t('common.pleaseWait');
+
   return (
     <div
       className={
@@ -30,11 +35,11 @@ export default function HeroLoading({
         </div>
 
         <h3 className="relative text-xl font-black tracking-tight text-slate-800">
-          {title}
+          {loadingTitle}
         </h3>
 
         <p className="relative mt-2 text-sm leading-6 text-slate-500">
-          {message}
+          {loadingMessage}
         </p>
 
         <div className="relative mt-6 flex items-center justify-center gap-2">

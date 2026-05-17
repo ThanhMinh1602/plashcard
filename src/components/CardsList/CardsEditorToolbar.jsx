@@ -3,6 +3,7 @@ import { FiCornerUpLeft, FiCornerUpRight, FiPlus, FiShuffle } from "react-icons/
 import { Player } from "@lottiefiles/react-lottie-player";
 import { BRUSH_TYPES, TOOL_LIST, cn } from "./constants";
 import usePenPress from "./hooks/usePenPress";
+import { useLanguage } from "../../i18n/LanguageContext";
 
 import monkey1 from "../../assets/lottie/monkey1.json";
 import monkey2 from "../../assets/lottie/monkey2.json";
@@ -21,6 +22,7 @@ export default function CardsEditorToolbar({
   onToggleReorderMode,
 }) {
   const bindPress = usePenPress();
+  const { t } = useLanguage();
   const isEraser = toolbox.tool === "eraser";
   const isSelect = toolbox.tool === "select";
   const currentSize = isEraser
@@ -30,6 +32,7 @@ export default function CardsEditorToolbar({
     ? "#ffffff"
     : toolbox.brushColors[toolbox.brushType] || "#000000";
   const maxSize = isEraser ? 100 : 50;
+  const toolLabelKey = (id) => `cards.tools.${id}`;
 
   useEffect(() => {
     if (!isEraser && toolbox.size > 50) {
@@ -44,7 +47,7 @@ export default function CardsEditorToolbar({
           <div className='flex items-center gap-1 rounded-xl border border-slate-100 bg-slate-50 p-1'>
             <button
               type='button'
-              title='Undo'
+              title={t('toolbar.undo')}
               {...bindPress(
                 () => activeCanvasRef?.undo?.(),
                 !activeCanvasRef || !activeStatus.canUndo,
@@ -62,7 +65,7 @@ export default function CardsEditorToolbar({
 
             <button
               type='button'
-              title='Redo'
+              title={t('toolbar.redo')}
               {...bindPress(
                 () => activeCanvasRef?.redo?.(),
                 !activeCanvasRef || !activeStatus.canRedo,
@@ -91,7 +94,7 @@ export default function CardsEditorToolbar({
                 <button
                   key={item.id}
                   type='button'
-                  title={item.label}
+                  title={t(toolLabelKey(item.id))}
                   {...bindPress(() =>
                     setToolbox((prev) => ({
                       ...prev,
@@ -107,7 +110,7 @@ export default function CardsEditorToolbar({
                   )}
                 >
                   <Icon size={12} className='mb-0.5' />
-                  <span>{item.label}</span>
+                  <span>{t(toolLabelKey(item.id))}</span>
                 </button>
               );
             })}
@@ -122,7 +125,7 @@ export default function CardsEditorToolbar({
                 <button
                   key={item.id}
                   type='button'
-                  title={item.label}
+                  title={t(toolLabelKey(item.id))}
                   {...bindPress(() =>
                     setToolbox((prev) => ({
                       ...prev,
@@ -137,7 +140,7 @@ export default function CardsEditorToolbar({
                   )}
                 >
                   <Icon size={12} className='mb-0.5' />
-                  <span>{item.label}</span>
+                  <span>{t(toolLabelKey(item.id))}</span>
                 </button>
               );
             })}
@@ -155,7 +158,7 @@ export default function CardsEditorToolbar({
               )}
             >
               <FiShuffle size={16} />
-              <span>Sắp xếp</span>
+              <span>{t('toolbar.reorder')}</span>
             </button>
 
             <button
@@ -170,7 +173,7 @@ export default function CardsEditorToolbar({
               )}
             >
               <FiPlus size={16} />
-              <span>Thêm thẻ</span>
+              <span>{t('toolbar.addCard')}</span>
             </button>
           </div>
         </div>
@@ -178,7 +181,7 @@ export default function CardsEditorToolbar({
         <div className='cards-editor-toolbar-controls flex w-full min-w-max items-center gap-2'>
           <div className='flex shrink-0 items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-2 py-1'>
             <label className='text-[9px] font-bold uppercase tracking-widest text-slate-500'>
-              Color
+              {t('toolbar.color')}
             </label>
 
             <input
@@ -206,7 +209,7 @@ export default function CardsEditorToolbar({
 
           <div className='flex flex-1 items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-2 py-1'>
             <label className='text-[9px] font-bold uppercase tracking-widest text-slate-500'>
-              Size
+              {t('toolbar.size')}
             </label>
 
             <input

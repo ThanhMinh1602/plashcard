@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi';
 
 import { getCardBackgroundPair } from '../../utils/cardBackgrounds';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const SWIPE_THRESHOLD = 80;
 const SWIPE_VELOCITY = 500;
@@ -44,6 +45,7 @@ function getCardCreatedOrder(card, fallbackIndex) {
 }
 
 function StudyCardFace({ src, side, backgroundPairId }) {
+  const { t } = useLanguage();
   const isFront = side === 'front';
   const backgroundPair = getCardBackgroundPair(backgroundPairId);
   const backgroundSrc = isFront ? backgroundPair.front : backgroundPair.back;
@@ -62,7 +64,7 @@ function StudyCardFace({ src, side, backgroundPairId }) {
         {src && (
           <img
             src={src}
-            alt={isFront ? 'Mặt trước' : 'Mặt sau'}
+            alt={isFront ? t('study.front') : t('study.back')}
             className="relative z-10 block h-full w-full select-none object-fill"
             draggable={false}
           />
@@ -107,6 +109,7 @@ const faceVariants = {
 };
 
 export default function StudyScreen({ packageItem, cards = [], onBack }) {
+  const { t } = useLanguage();
   const [shuffleSeed, setShuffleSeed] = useState(0);
 
   const normalizedCards = useMemo(() => {
@@ -281,14 +284,14 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
         <div className="text-center">
           <h2 className="text-xl font-bold text-slate-800">
-            Chưa có thẻ để học
+            {t('study.noCards')}
           </h2>
 
           <button
             onClick={onBack}
             className="mt-4 rounded-xl bg-sky-500 px-6 py-2 text-white"
           >
-            Quay lại
+            {t('common.back')}
           </button>
         </div>
       </div>
@@ -300,14 +303,14 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
         <div className="text-center">
           <h2 className="text-xl font-bold text-slate-800">
-            Không tìm thấy thẻ hiện tại
+            {t('study.currentMissing')}
           </h2>
 
           <button
             onClick={handleRestart}
             className="mt-4 rounded-xl bg-sky-500 px-6 py-2 text-white"
           >
-            Học lại
+            {t('study.restart')}
           </button>
         </div>
       </div>
@@ -372,7 +375,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                 <FiCheckCircle size={48} className="mx-auto text-emerald-500" />
 
                 <h3 className="mt-4 text-2xl font-black text-slate-800">
-                  Hoàn thành rồi!
+                  {t('study.completed')}
                 </h3>
 
                 <button
@@ -380,7 +383,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                   className="mt-6 inline-flex items-center gap-2 rounded-xl bg-sky-500 px-8 py-3 font-bold text-white shadow-lg shadow-sky-200 transition hover:scale-105 active:scale-95"
                 >
                   <FiRefreshCw size={18} />
-                  Học lại
+                  {t('study.restart')}
                 </button>
               </motion.div>
             ) : (
@@ -460,7 +463,7 @@ export default function StudyScreen({ packageItem, cards = [], onBack }) {
                   }}
                 >
                   <FiRotateCw size={14} />
-                  <span>Chạm để lật · Lướt để chuyển thẻ</span>
+                  <span>{t('study.hint')}</span>
                 </motion.div>
               </motion.div>
             )}

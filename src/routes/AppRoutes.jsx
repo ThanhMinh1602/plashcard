@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 
 import { addPackage } from '../services/flashcardService';
+import { useLanguage } from '../i18n/LanguageContext';
 
 import Login from '../components/Auth/Login';
 import Register from '../components/Auth/Register';
@@ -12,11 +13,13 @@ import PackageTrash from '../components/Packages/PackageTrash';
 import CardsList from '../components/CardsList/CardsList';
 import StudyScreen from '../components/Study/StudyScreen';
 import DrawingScreen from '../components/Drawing/DrawingScreen';
+import LanguageSettings from '../components/Common/LanguageSettings';
 
 import ProtectedRoute from './ProtectedRoute';
 
 export default function AppRoutes({ user }) {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [studyCards, setStudyCards] = useState([]);
@@ -37,7 +40,7 @@ export default function AppRoutes({ user }) {
       navigate('/packages/edit');
     } catch (err) {
       console.error(err);
-      alert('Lỗi tạo gói');
+      alert(t('packages.createError'));
     }
   };
 
@@ -145,6 +148,15 @@ export default function AppRoutes({ user }) {
         element={
           <ProtectedRoute user={user}>
             <ChangePassword onBack={handleBackToPackages} />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/language"
+        element={
+          <ProtectedRoute user={user}>
+            <LanguageSettings onBack={handleBackToPackages} />
           </ProtectedRoute>
         }
       />

@@ -2,6 +2,7 @@ import React from 'react';
 import { FiArrowLeft, FiCheck, FiEdit2, FiSave, FiX } from 'react-icons/fi';
 import { cn } from './constants';
 import usePenPress from './hooks/usePenPress';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function CardsEditorHeader({
   onBack,
@@ -22,6 +23,7 @@ export default function CardsEditorHeader({
   saveMessage,
 }) {
   const bindPress = usePenPress();
+  const { t } = useLanguage();
   const statusMessage = nameError || error || saveMessage;
   const hasErrorStatus = Boolean(nameError || error);
 
@@ -45,7 +47,7 @@ export default function CardsEditorHeader({
                   value={draftPackageName}
                   onChange={(e) => setDraftPackageName(e.target.value)}
                   onKeyDown={handleHeaderNameKeyDown}
-                  placeholder='Nhập tên gói...'
+                  placeholder={t('editor.packageNamePlaceholder')}
                   className='h-9 w-full min-w-[180px] rounded-lg border border-sky-200 bg-white px-3 text-base font-bold text-slate-800 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100'
                 />
 
@@ -79,7 +81,7 @@ export default function CardsEditorHeader({
                       : 'text-slate-400 italic',
                   )}
                 >
-                  {packageName.trim() || 'Chưa đặt tên gói'}
+                  {packageName.trim() || t('editor.unnamedPackage')}
                 </span>
 
                 <FiEdit2
@@ -115,7 +117,7 @@ export default function CardsEditorHeader({
 
           <div className='hidden items-center gap-2 md:flex'>
             <span className='rounded-md bg-slate-100 px-2.5 py-1 font-medium text-slate-600'>
-              <span className='font-bold text-slate-800'>{cardsCount}</span> thẻ
+              {t('editor.cardCount', { count: cardsCount })}
             </span>
           </div>
 
@@ -132,7 +134,7 @@ export default function CardsEditorHeader({
           >
             <FiSave size={16} />
             <span className='hidden sm:inline'>
-              {savingAll ? 'Đang lưu...' : 'Lưu tất cả'}
+              {savingAll ? t('editor.saving') : t('editor.saveAll')}
             </span>
           </button>
         </div>

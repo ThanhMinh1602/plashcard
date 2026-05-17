@@ -28,6 +28,7 @@ import {
 import usePackageEditor from "./hooks/usePackageEditor";
 import useCanvasRegistry from "./hooks/useCanvasRegistry";
 import usePenPress from "./hooks/usePenPress";
+import { useLanguage } from "../../i18n/LanguageContext";
 
 function ThumbnailReorderItem({
   item,
@@ -119,6 +120,7 @@ export default function CardsList({
   onBack,
   onPackageUpdated,
 }) {
+  const { t } = useLanguage();
   const bindPress = usePenPress();
   const BACK_CONFIRM_MONKEY_LIST = [monkey1, monkey2, monkey3];
 
@@ -602,7 +604,7 @@ export default function CardsList({
     try {
       setLoading(true);
       setOpenProgress(8);
-      setOpenProgressMessage("Đang kết nối dữ liệu bộ thẻ...");
+      setOpenProgressMessage(t("cards.loadingConnect"));
 
       if (openProgressTimerRef.current) {
         clearInterval(openProgressTimerRef.current);
@@ -618,11 +620,11 @@ export default function CardsList({
           );
 
           if (next >= 72) {
-            setOpenProgressMessage("Đang dựng không gian chỉnh sửa...");
+            setOpenProgressMessage(t("cards.loadingEditor"));
           } else if (next >= 38) {
-            setOpenProgressMessage("Đang chuẩn bị dữ liệu và nền thẻ...");
+            setOpenProgressMessage(t("cards.loadingBackgrounds"));
           } else {
-            setOpenProgressMessage("Đang tải nội dung bộ thẻ...");
+            setOpenProgressMessage(t("cards.loadingContent"));
           }
 
           return next;
@@ -631,7 +633,7 @@ export default function CardsList({
 
       const rawDocs = await getFlashcards(user.uid, packageItem.id);
       setOpenProgress(100);
-      setOpenProgressMessage("Hoàn tất, đang mở bộ thẻ...");
+      setOpenProgressMessage(t("cards.loadingDone"));
 
       // Logic gộp PairId
       const pairsMap = {};
@@ -698,7 +700,7 @@ export default function CardsList({
         setActiveCanvasKey(`${finalCurrentEditId}-front`);
       }
     } catch (err) {
-      setError("Lỗi tải thẻ từ Cloud");
+      setError(t("cards.loadFromCloudError"));
     } finally {
       if (openProgressTimerRef.current) {
         clearInterval(openProgressTimerRef.current);
@@ -897,7 +899,7 @@ export default function CardsList({
       await updatePackageBackground(user.uid, packageItem.id, backgroundPairId);
     } catch (err) {
       console.error(err);
-      setError("Lá»—i lÆ°u ná»n chung cá»§a gÃ³i");
+      setError(t("cards.saveBackgroundError"));
     }
   };
 
@@ -942,7 +944,7 @@ export default function CardsList({
       setDeleteTargetId(null);
     } catch (err) {
       console.error(err);
-      alert("Lỗi xóa thẻ");
+      alert(t("cards.deleteCardError"));
     } finally {
       setIsDeletingCard(false);
     }
@@ -950,7 +952,7 @@ export default function CardsList({
 
   const handleImportClick = () => {
     if (!activeCanvasRef) {
-      setError("Hãy chạm vào một mặt thẻ trước khi import ảnh");
+      setError(t("cards.importSelectSideError"));
       return;
     }
 
@@ -1039,13 +1041,13 @@ export default function CardsList({
       markCardsSnapshotSaved(savedNextCards);
 
       if (showMessage) {
-        setSaveMessage(`Đã lưu ${changedCards.length} thẻ thay đổi`);
+        setSaveMessage(t("cards.savedChangedCards", { count: changedCards.length }));
       }
 
       return true;
     } catch (err) {
       console.error(err);
-      setError("Lỗi lưu thẻ lên server");
+      setError(t("cards.saveServerError"));
       return false;
     } finally {
       setSavingAll(false);
@@ -1270,15 +1272,15 @@ export default function CardsList({
             />
           </div>
 
-          <h3 className='text-lg font-black text-slate-800'>Đang tải thẻ...</h3>
+          <h3 className='text-lg font-black text-slate-800'>{t("cards.loadingCards")}</h3>
 
           <p className='mt-2 text-sm leading-6 text-slate-500'>
-            Hệ thống đang chuẩn bị dữ liệu và nền thẻ cho bộ này.
+            {t("cards.loadingCardsMessage")}
           </p>
 
           <div className='mt-6 w-full'>
             <div className='mb-2 flex items-center justify-between text-xs font-black text-slate-500'>
-              <span>Tiến độ tải</span>
+              <span>{t("cards.loadProgress")}</span>
               <span>{openProgress}%</span>
             </div>
 
@@ -1292,7 +1294,7 @@ export default function CardsList({
 
             <div className='mt-3 text-xs font-bold text-slate-500'>
               {openProgressMessage ||
-                "Hệ thống đang chuẩn bị dữ liệu và nền thẻ cho bộ này."}
+                t("cards.loadingCardsMessage")}
             </div>
           </div>
         </div>
@@ -1447,10 +1449,10 @@ export default function CardsList({
                           )}
                           title={
                             saveStatus === "saving"
-                              ? "Đang lưu"
+                              ? t("cards.saveStatusSaving")
                               : saveStatus === "success"
-                                ? "Đã lưu"
-                                : "Lưu thất bại"
+                                ? t("cards.saveStatusSuccess")
+                                : t("cards.saveStatusError")
                           }
                         >
                           {saveStatus === "saving" && (
@@ -1570,7 +1572,7 @@ export default function CardsList({
               onPointerUpCapture={(e) => e.stopPropagation()}
               data-allow-touch
               className='absolute right-4 top-4 z-50 inline-flex h-8 items-center gap-1.5 rounded-full border border-white/70 bg-white/65 px-2.5 text-[10px] font-black text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.10)] backdrop-blur-2xl transition hover:bg-white hover:text-slate-900'
-              title='Trở về kích thước ban đầu'
+              title={t("cards.resetZoom")}
             >
               <FiMaximize2 size={13} />
               <span>{Math.round(cardTransform.zoom * 100)}%</span>
@@ -1592,11 +1594,11 @@ export default function CardsList({
             </div>
 
             <h3 className='text-lg font-black text-slate-800'>
-              Đang lưu thẻ...
+              {t("cards.savingCards")}
             </h3>
 
             <p className='mt-2 text-sm leading-6 text-slate-500'>
-              Vui lòng không thoát ứng dụng trong lúc hệ thống đang lưu dữ liệu.
+              {t("cards.savingCardsMessage")}
             </p>
           </div>
         </div>
@@ -1604,10 +1606,10 @@ export default function CardsList({
 
       <ConfirmModal
         open={showBackConfirm}
-        title='Thoát mà không lưu?'
-        message='Mất hết ráng chịu nha! :))'
-        confirmText='Thoát không lưu'
-        cancelText='Ở lại'
+        title={t("cards.leaveUnsavedTitle")}
+        message={t("cards.leaveUnsavedMessage")}
+        confirmText={t("cards.leaveUnsavedConfirm")}
+        cancelText={t("common.cancel")}
         variant='warning'
         loading={false}
         lottieSrc={BACK_CONFIRM_MONKEY_LIST[backConfirmMonkeyIndex]}
@@ -1618,10 +1620,10 @@ export default function CardsList({
 
       <ConfirmModal
         open={Boolean(deleteTargetId)}
-        title='Xóa cặp thẻ này?'
-        message='Cả mặt trước và mặt sau của thẻ sẽ bị xóa.'
-        confirmText='Xóa thẻ'
-        cancelText='Hủy'
+        title={t("cards.deleteCardTitle")}
+        message={t("cards.deleteCardMessage")}
+        confirmText={t("cards.deleteCardConfirm")}
+        cancelText={t("modal.cancel")}
         variant='danger'
         loading={isDeletingCard}
         onConfirm={handleConfirmDeleteCard}

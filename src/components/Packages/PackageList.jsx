@@ -17,9 +17,9 @@ import {
   getPackages,
   updatePackageBackground,
 } from '../../services/flashcardService';
-import { syncFirebaseCardsToApi } from '../../services/firebaseToApiSyncService';
 import ConfirmModal from "../Common/ConfirmModal";
 import loadingLottie from "../../assets/lottie/sundance.json";
+import { useLanguage } from "../../i18n/LanguageContext";
 
 export default function PackageList({
   user,
@@ -28,6 +28,7 @@ export default function PackageList({
   onStudyPackage,
   onDrawPackage,
 }) {
+  const { t } = useLanguage();
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -38,7 +39,6 @@ export default function PackageList({
   const [studyProgressMessage, setStudyProgressMessage] = useState("");
   const studyProgressTimerRef = useRef(null);
   const importInputRef = useRef(null);
-  const [isSyncingFirebase, setIsSyncingFirebase] = useState(false);
   const [importing, setImporting] = useState(false);
   const [exportingId, setExportingId] = useState(null);
   const [transferTask, setTransferTask] = useState(null);
@@ -66,38 +66,9 @@ export default function PackageList({
       setPackages(data);
     } catch (err) {
       console.error(err);
-      setError("Lỗi tải danh sách gói");
+      setError(t("packages.loadError"));
     } finally {
       setLoading(false);
-    }
-  };
-  const handleSyncFirebaseToApi = async () => {
-    if (!user) return;
-
-    const ok = window.confirm(
-      'Bạn có chắc muốn sync data Firebase cũ sang API mới không? Nút này chỉ dùng tạm để migrate data.',
-    );
-
-    if (!ok) return;
-
-    try {
-      setIsSyncingFirebase(true);
-      setError('');
-
-      const result = await syncFirebaseCardsToApi({
-        currentUser: user,
-      });
-
-      alert(
-        `Sync thành công!\nPackage: ${result.packageCount}\nCard side: ${result.cardSideCount}`,
-      );
-
-      await loadPackages();
-    } catch (err) {
-      console.error(err);
-      alert(err.message || 'Lỗi sync Firebase sang API');
-    } finally {
-      setIsSyncingFirebase(false);
     }
   };
   const handleDeleteClick = (packageItem) => {
@@ -114,7 +85,7 @@ export default function PackageList({
       setDeleteTarget(null);
     } catch (err) {
       console.error(err);
-      alert("Lỗi xóa gói");
+      alert(t("packages.deleteError"));
     } finally {
       setIsDeleting(false);
     }
@@ -148,7 +119,7 @@ export default function PackageList({
       prev
         ? {
             ...prev,
-            message: "Dang huy thao tac...",
+            message: t("transfer.cancelling"),
             cancelling: true,
           }
         : prev,
@@ -170,8 +141,8 @@ export default function PackageList({
       cancelTransferRef.current = false;
       setTransferTask({
         type: "export",
-        title: "Dang export data",
-        message: "Dang tai toan bo the trong goi...",
+        title: t("transfer.exportTitle"),
+        message: t("transfer.exportLoadCards"),
         progress: 18,
         cancelling: false,
       });
@@ -181,7 +152,7 @@ export default function PackageList({
         prev
           ? {
               ...prev,
-              message: "Dang dong goi file JSON...",
+              message: t("transfer.exportPacking"),
               progress: 72,
             }
           : prev,
@@ -206,7 +177,7 @@ export default function PackageList({
         prev
           ? {
               ...prev,
-              message: "Export hoan tat",
+              message: t("transfer.exportDone"),
               progress: 100,
             }
           : prev,
@@ -214,7 +185,7 @@ export default function PackageList({
     } catch (err) {
       if (err?.message === "TRANSFER_CANCELLED") return;
       console.error(err);
-      alert("Lỗi export data gói");
+      alert(t("packages.exportError"));
     } finally {
       setExportingId(null);
       setTimeout(() => {
@@ -297,8 +268,8 @@ export default function PackageList({
       cancelTransferRef.current = false;
       setTransferTask({
         type: "import",
-        title: "Đang nhập data",
-        message: "Đang đọc file JSON...",
+        title: t("transfer.importTitle"),
+        message: t("transfer.importReadFile"),
         progress: 10,
         cancelling: false,
       });
@@ -309,14 +280,14 @@ export default function PackageList({
       const packageData = payload?.package || {};
       const importedPairs = getImportCardPairs(payload);
       const packageName =
-        packageData.name || file.name.replace(/\.json$/i, "") || "Imported package";
+        packageData.name || file.name.replace(/\.json$/i, "") || t("packages.importedPackage");
       const packageDescription = packageData.description || "";
       const backgroundPairId = packageData.backgroundPairId || "1";
       setTransferTask((prev) =>
         prev
           ? {
               ...prev,
-              message: "Dang tao goi moi...",
+              message: t("transfer.importCreatePackage"),
               progress: 28,
             }
           : prev,
@@ -333,7 +304,7 @@ export default function PackageList({
         prev
           ? {
               ...prev,
-              message: "Dang luu nen goi...",
+              message: t("transfer.importSaveBackground"),
               progress: 45,
             }
           : prev,
@@ -347,7 +318,7 @@ export default function PackageList({
           prev
             ? {
                 ...prev,
-                message: `Dang import ${importedPairs.length} the...`,
+                message: t("transfer.importCards", { count: importedPairs.length }),
                 progress: 68,
               }
             : prev,
@@ -360,7 +331,7 @@ export default function PackageList({
         prev
           ? {
               ...prev,
-              message: "Dang lam moi danh sach goi...",
+              message: t("transfer.importRefresh"),
               progress: 90,
             }
           : prev,
@@ -371,7 +342,7 @@ export default function PackageList({
         prev
           ? {
               ...prev,
-              message: "Import hoan tat",
+              message: t("transfer.importDone"),
               progress: 100,
             }
           : prev,
@@ -389,7 +360,7 @@ export default function PackageList({
         return;
       }
       console.error(err);
-      alert("Lỗi import data gói. Hãy kiểm tra file JSON.");
+      alert(t("packages.importError"));
     } finally {
       setImporting(false);
       setTimeout(() => {
@@ -405,7 +376,7 @@ export default function PackageList({
     try {
       setStudyingId(packageItem.id);
       setStudyProgress(8);
-      setStudyProgressMessage("Đang kết nối dữ liệu bộ thẻ...");
+      setStudyProgressMessage(t("packages.studyLoadConnect"));
 
       if (studyProgressTimerRef.current) {
         clearInterval(studyProgressTimerRef.current);
@@ -421,13 +392,13 @@ export default function PackageList({
           );
 
           if (next >= 72) {
-            setStudyProgressMessage("Đang sắp xếp thẻ cho phiên học...");
+            setStudyProgressMessage(t("packages.studyLoadSort"));
           } else if (next >= 38) {
             setStudyProgressMessage(
-              "Đang chuẩn bị nội dung mặt trước và mặt sau...",
+              t("packages.studyLoadContent"),
             );
           } else {
-            setStudyProgressMessage("Đang tải dữ liệu bộ thẻ...");
+            setStudyProgressMessage(t("packages.studyLoadData"));
           }
 
           return next;
@@ -436,13 +407,13 @@ export default function PackageList({
 
       const cards = await getFlashcards(user.uid, packageItem.id);
       setStudyProgress(100);
-      setStudyProgressMessage("Hoàn tất, đang mở phiên học...");
+      setStudyProgressMessage(t("packages.studyLoadDone"));
 
       await new Promise((resolve) => setTimeout(resolve, 180));
       onStudyPackage?.(packageItem, cards);
     } catch (err) {
       console.error(err);
-      alert("Lỗi tải thẻ để học");
+      alert(t("packages.studyLoadError"));
     } finally {
       if (studyProgressTimerRef.current) {
         clearInterval(studyProgressTimerRef.current);
@@ -461,11 +432,11 @@ export default function PackageList({
           <Player autoplay loop src={loadingLottie} className='h-40 w-40' />
 
           <h3 className='mt-2 text-xl font-black text-slate-800'>
-            Đang tải danh sách gói...
+            {t("packages.loadingTitle")}
           </h3>
 
           <p className='mt-2 text-sm font-semibold text-slate-500'>
-            Hệ thống đang chuẩn bị các bộ flashcard của bạn.
+            {t("packages.loadingMessage")}
           </p>
         </div>
       </div>
@@ -487,16 +458,16 @@ export default function PackageList({
             </div>
 
             <h3 className='text-lg font-black text-slate-800'>
-              Đang tải bộ thẻ...
+              {t("packages.studyLoadTitle")}
             </h3>
 
             <p className='mt-2 text-sm leading-6 text-slate-500'>
-              Hệ thống đang chuẩn bị dữ liệu để bắt đầu phiên học.
+              {t("packages.studyLoadMessage")}
             </p>
 
             <div className='mt-6 w-full'>
               <div className='mb-2 flex items-center justify-between text-xs font-black text-slate-500'>
-                <span>Tiến độ tải</span>
+                <span>{t("cards.loadProgress")}</span>
                 <span>{studyProgress}%</span>
               </div>
 
@@ -510,7 +481,7 @@ export default function PackageList({
 
               <div className='mt-3 text-xs font-bold text-slate-500'>
                 {studyProgressMessage ||
-                  "Hệ thống đang chuẩn bị dữ liệu để bắt đầu phiên học."}
+                  t("packages.studyLoadMessage")}
               </div>
             </div>
           </div>
@@ -539,7 +510,7 @@ export default function PackageList({
 
             <div className='mt-6 w-full'>
               <div className='mb-2 flex items-center justify-between text-xs font-black text-slate-500'>
-                <span>Tien do</span>
+                <span>{t("common.progress")}</span>
                 <span>{transferTask.progress}%</span>
               </div>
 
@@ -558,7 +529,7 @@ export default function PackageList({
               disabled={transferTask.cancelling}
               className='mt-6 inline-flex h-10 items-center justify-center rounded-2xl border border-rose-100 bg-rose-50 px-5 text-sm font-black text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60'
             >
-              {transferTask.cancelling ? "Dang huy..." : "Huy"}
+              {transferTask.cancelling ? t("transfer.cancellingShort") : t("transfer.cancel")}
             </button>
           </div>
         </div>
@@ -581,7 +552,7 @@ export default function PackageList({
             type='button'
           >
             <FiUpload size={18} />
-            <span>{importing ? "Đang nhập..." : "Nhập data"}</span>
+            <span>{importing ? t("packages.importingData") : t("packages.importData")}</span>
           </button>
 
           <button
@@ -590,28 +561,10 @@ export default function PackageList({
             type='button'
           >
             <FiFolderPlus size={18} />
-            <span>Tạo gói mới</span>
+            <span>{t("packages.createNew")}</span>
           </button>
         </div>
       </div>
-      {/* <button
-        type="button"
-        onClick={handleSyncFirebaseToApi}
-        disabled={isSyncingFirebase}
-        style={{
-          marginLeft: 12,
-          padding: '10px 14px',
-          borderRadius: 12,
-          border: 'none',
-          cursor: isSyncingFirebase ? 'not-allowed' : 'pointer',
-          background: 'linear-gradient(135deg, #ef4444, #f97316)',
-          color: '#fff',
-          fontWeight: 700,
-          opacity: isSyncingFirebase ? 0.6 : 1,
-        }}
-      >
-        {isSyncingFirebase ? 'Đang sync...' : 'Sync Firebase cũ'}
-      </button> */}
       <div className='package-content-wrap mx-auto w-full max-w-7xl px-4 pt-20 pb-6 sm:px-6 lg:px-8'>
         <button
           className='package-mobile-import-card hidden w-full items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-4 py-3 text-sm font-black text-sky-700 shadow-[0_14px_34px_rgba(59,130,246,0.12)] disabled:cursor-not-allowed disabled:opacity-60'
@@ -620,7 +573,7 @@ export default function PackageList({
           type='button'
         >
           <FiUpload size={18} />
-          <span>{importing ? "Đang nhập..." : "Nhập data"}</span>
+          <span>{importing ? t("packages.importingData") : t("packages.importData")}</span>
         </button>
 
         {error && (
@@ -638,12 +591,11 @@ export default function PackageList({
             </div>
 
             <h3 className='relative text-2xl font-black tracking-tight text-slate-800'>
-              Bạn chưa có gói nào
+              {t("packages.emptyTitle")}
             </h3>
 
             <p className='relative mx-auto mt-3 max-w-md text-sm leading-6 text-slate-500'>
-              Hãy tạo gói đầu tiên để bắt đầu xây dựng bộ flashcard của riêng
-              bạn.
+              {t("packages.emptyMessage")}
             </p>
 
             <button
@@ -652,7 +604,7 @@ export default function PackageList({
               type='button'
             >
               <FiFolderPlus size={18} />
-              <span>Tạo gói đầu tiên</span>
+              <span>{t("packages.createFirst")}</span>
             </button>
           </div>
         ) : (
@@ -685,7 +637,7 @@ export default function PackageList({
                       <button
                         type='button'
                         className='package-card-export inline-flex h-8 w-8 items-center justify-center rounded-full border border-sky-100 bg-white/90 text-sky-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
-                        title='Export data'
+                        title={t("packages.exportData")}
                         disabled={exportingId === item.id || Boolean(transferTask)}
                         onClick={(e) => handleExportPackage(item, e)}
                       >
@@ -700,15 +652,15 @@ export default function PackageList({
 
                   <div className='mb-3 inline-flex items-center gap-2 rounded-full border border-slate-100 bg-slate-50/90 px-3 py-1 text-xs font-bold text-slate-500'>
                     <FiPackage size={13} />
-                    <span>Flashcard package</span>
+                    <span>{t("packages.packageType")}</span>
                   </div>
 
                   <h3 className='line-clamp-1 text-xl font-black tracking-tight text-slate-800'>
-                    {item.name || "Gói chưa đặt tên"}
+                    {item.name || t("common.unnamedPackage")}
                   </h3>
 
                   <p className='mt-2 min-h-[48px] line-clamp-2 text-sm leading-6 text-slate-500'>
-                    {item.description || "Chưa có mô tả"}
+                    {item.description || t("common.noDescription")}
                   </p>
                 </div>
 
@@ -719,7 +671,7 @@ export default function PackageList({
                     type='button'
                   >
                     <BsFolder2Open size={16} />
-                    <span>Mở</span>
+                    <span>{t("packages.open")}</span>
                   </button>
 
                   <button
@@ -730,7 +682,7 @@ export default function PackageList({
                   >
                     <BsPlayCircle size={16} />
                     <span>
-                      {studyingId === item.id ? "Đang tải..." : "Học"}
+                      {studyingId === item.id ? t("packages.studying") : t("packages.study")}
                     </span>
                   </button>
 
@@ -740,7 +692,7 @@ export default function PackageList({
                     type='button'
                   >
                     <FiTrash2 size={16} />
-                    <span>Xóa</span>
+                    <span>{t("common.delete")}</span>
                   </button>
                 </div>
               </div>
@@ -751,11 +703,12 @@ export default function PackageList({
 
       <ConfirmModal
         open={Boolean(deleteTarget)}
-        title='Xóa gói này?'
-        message={`${deleteTarget?.name?.trim() || "Gói chưa đặt tên"
-          } sẽ bị xóa cùng toàn bộ flashcard bên trong.`}
-        confirmText='Xóa gói'
-        cancelText='Hủy'
+        title={t("packages.deleteTitle")}
+        message={t("packages.deleteMessage", {
+          name: deleteTarget?.name?.trim() || t("common.unnamedPackage"),
+        })}
+        confirmText={t("packages.deleteConfirm")}
+        cancelText={t("modal.cancel")}
         variant='danger'
         loading={isDeleting}
         onConfirm={handleConfirmDelete}

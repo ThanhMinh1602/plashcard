@@ -1,7 +1,10 @@
 import React from 'react';
 import { FiStar } from 'react-icons/fi';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export default function AuthShell({ title, subtitle, children, footer }) {
+  const { t } = useLanguage();
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(186,230,253,0.55),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(249,168,212,0.45),transparent_30%),linear-gradient(180deg,#f8fbff_0%,#fff5fb_100%)]" />
@@ -14,7 +17,7 @@ export default function AuthShell({ title, subtitle, children, footer }) {
           <div className="mb-8 text-center">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/80 px-3 py-1 text-xs font-semibold text-sky-600 shadow-sm">
            <FiStar size={14} />
-              <span>Flashcard App</span>
+              <span>{t('auth.flashcardApp')}</span>
             </div>
 
             <h1 className="gradient-text text-3xl font-black tracking-tight sm:text-4xl">

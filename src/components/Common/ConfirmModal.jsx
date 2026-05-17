@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Player } from '@lottiefiles/react-lottie-player';
 import { createPortal } from 'react-dom';
 import { FiAlertTriangle, FiLogOut, FiTrash2, FiX } from 'react-icons/fi';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 const ICON_MAP = {
   danger: FiTrash2,
@@ -26,10 +27,10 @@ const TONE_MAP = {
 
 export default function ConfirmModal({
   open,
-  title = 'Xác nhận',
-  message = 'Bạn có chắc không?',
-  confirmText = 'Xác nhận',
-  cancelText = 'Hủy',
+  title,
+  message,
+  confirmText,
+  cancelText,
   variant = 'danger',
   loading = false,
   lottieSrc = null,
@@ -37,11 +38,16 @@ export default function ConfirmModal({
   onConfirm,
   onClose,
 }) {
+  const { t } = useLanguage();
   const Icon = ICON_MAP[variant] || FiAlertTriangle;
   const tone = TONE_MAP[variant] || TONE_MAP.warning;
+  const modalTitle = title || t('modal.defaultTitle');
+  const modalMessage = message || t('modal.defaultMessage');
+  const modalConfirmText = confirmText || t('modal.confirm');
+  const modalCancelText = cancelText || t('modal.cancel');
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
 
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && !loading) onClose?.();
@@ -60,74 +66,71 @@ export default function ConfirmModal({
 
   return createPortal(
     <div
-      data-open="true"
-      className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm"
+      data-open='true'
+      className='fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm'
       onClick={() => {
         if (!loading) onClose?.();
       }}
     >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-modal-title"
-        className="relative w-full max-w-md rounded-[28px] border border-white/70 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.28)]"
+        role='dialog'
+        aria-modal='true'
+        aria-labelledby='confirm-modal-title'
+        className='relative w-full max-w-md rounded-[28px] border border-white/70 bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.28)]'
         onClick={(e) => e.stopPropagation()}
       >
         <button
-          type="button"
-          className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          type='button'
+          className='absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-60'
           onClick={onClose}
           disabled={loading}
-          aria-label="Đóng"
+          aria-label={t('modal.close')}
         >
           <FiX size={18} />
         </button>
 
-       <div className="mb-4 flex justify-center">
-  {lottieSrc ? (
-    <div className={lottieClassName}>
-      <Player
-        autoplay
-        loop
-        src={lottieSrc}
-        className="h-full w-full"
-      />
-    </div>
-  ) : (
-    <div className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${tone.iconWrap}`}>
-      <Icon size={24} />
-    </div>
-  )}
-</div>
-
-        <div className="text-center">
-          <h3 id="confirm-modal-title" className="text-xl font-black tracking-tight text-slate-800">
-            {title}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">{message}</p>
+        <div className='mb-4 flex justify-center'>
+          {lottieSrc ? (
+            <div className={lottieClassName}>
+              <Player autoplay loop src={lottieSrc} className='h-full w-full' />
+            </div>
+          ) : (
+            <div className={`inline-flex h-14 w-14 items-center justify-center rounded-full ${tone.iconWrap}`}>
+              <Icon size={24} />
+            </div>
+          )}
         </div>
 
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <div className='text-center'>
+          <h3 id='confirm-modal-title' className='text-xl font-black tracking-tight text-slate-800'>
+            {modalTitle}
+          </h3>
+          <p className='mt-2 text-sm leading-6 text-slate-500'>
+            {modalMessage}
+          </p>
+        </div>
+
+        <div className='mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end'>
           <button
-            type="button"
-            className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
+            type='button'
+            className='inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60'
             onClick={onClose}
             disabled={loading}
           >
-            {cancelText}
+            {modalCancelText}
           </button>
 
           <button
-            type="button"
+            type='button'
             className={`inline-flex h-11 items-center justify-center rounded-2xl px-5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${tone.confirmBtn}`}
             onClick={onConfirm}
             disabled={loading}
           >
-            {loading ? 'Đang xử lý...' : confirmText}
+            {loading ? t('modal.processing') : modalConfirmText}
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

@@ -8,6 +8,7 @@ import {
   CARD_BACKGROUND_PAIRS,
   getCardBackgroundPair,
 } from "../../utils/cardBackgrounds";
+import { useLanguage } from "../../i18n/LanguageContext";
 
 export default function FlashcardPairItem({
   item,
@@ -23,6 +24,7 @@ export default function FlashcardPairItem({
   backgroundPairId,
 }) {
   const bindPress = usePenPress();
+  const { t } = useLanguage();
   const [showBackgroundModal, setShowBackgroundModal] = useState(false);
 
   const frontKey = `${item.localId}-front`;
@@ -76,11 +78,11 @@ export default function FlashcardPairItem({
 
             <div>
               <div className='text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400'>
-                Flashcard pair
+                {t("cards.pair")}
               </div>
 
               <div className='text-sm font-semibold text-slate-600'>
-                Tay: cuộn/zoom · Bút: viết
+                {t("cards.handPenHint")}
               </div>
             </div>
           </div>
@@ -93,7 +95,7 @@ export default function FlashcardPairItem({
               className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white/85 px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-white'
             >
               <FiImage size={16} />
-              <span>{backgroundPair.label}</span>
+              <span>{t("cards.backgroundName", { id: backgroundPair.id })}</span>
               <span className='flex h-8 w-10 overflow-hidden rounded-lg bg-slate-100'>
                 <img
                   src={backgroundPair.front}
@@ -109,18 +111,13 @@ export default function FlashcardPairItem({
                 />
               </span>
             </button>
-            {/*
-
-            Nền thẻ
-
-          */}
             <button
               type='button'
               {...bindPress(() => handleDeleteCardPair(item.localId))}
               className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-sm font-semibold text-rose-600 transition hover:-translate-y-0.5 hover:bg-rose-100'
             >
               <FiTrash2 size={16} />
-              <span>Xóa cặp thẻ</span>
+              <span>{t("cards.deletePair")}</span>
             </button>
           </div>
         </div>
@@ -203,10 +200,10 @@ export default function FlashcardPairItem({
                     id={`background-modal-title-${item.localId}`}
                     className='text-lg font-black text-slate-800'
                   >
-                    Chọn nền cho package
+                    {t("cards.chooseBackground")}
                   </h3>
                   <p className='mt-1 text-sm font-medium text-slate-500'>
-                    Tất cả thẻ trong package này sẽ dùng cùng một bộ nền.
+                    {t("cards.backgroundSubtitle")}
                   </p>
                 </div>
 
@@ -214,7 +211,7 @@ export default function FlashcardPairItem({
                   type='button'
                   className='inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200 hover:text-slate-900'
                   onClick={() => setShowBackgroundModal(false)}
-                  aria-label='Đóng'
+                  aria-label={t("modal.close")}
                 >
                   <FiX size={18} />
                 </button>
@@ -240,7 +237,7 @@ export default function FlashcardPairItem({
                     >
                       <div className='mb-2 flex items-center justify-between px-1'>
                         <span className='text-sm font-black text-slate-700'>
-                          {pair.label}
+                          {t("cards.backgroundName", { id: pair.id })}
                         </span>
                         {selected && (
                           <span className='inline-flex h-7 w-7 items-center justify-center rounded-full bg-sky-500 text-white'>
@@ -253,14 +250,18 @@ export default function FlashcardPairItem({
                         <div className='overflow-hidden rounded-xl bg-white'>
                           <img
                             src={pair.front}
-                            alt={`${pair.label} front`}
+                            alt={t("cards.backgroundFrontAlt", {
+                              label: t("cards.backgroundName", { id: pair.id }),
+                            })}
                             className='aspect-[9/16] w-full object-cover'
                           />
                         </div>
                         <div className='overflow-hidden rounded-xl bg-white'>
                           <img
                             src={pair.back}
-                            alt={`${pair.label} back`}
+                            alt={t("cards.backgroundBackAlt", {
+                              label: t("cards.backgroundName", { id: pair.id }),
+                            })}
                             className='aspect-[9/16] w-full object-cover'
                           />
                         </div>

@@ -12,9 +12,11 @@ import {
   resetPassword,
   verifyResetOtp,
 } from "../../services/authService";
+import { useLanguage } from "../../i18n/LanguageContext";
 import AuthShell from "./AuthShell";
 
 export default function ForgotPassword({ onBack }) {
+  const { t } = useLanguage();
   const [step, setStep] = useState(1);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -35,17 +37,17 @@ export default function ForgotPassword({ onBack }) {
     clearMessage();
 
     if (!email.trim()) {
-      setError("Vui lòng nhập email của bạn");
+      setError(t("auth.fillResetEmail"));
       return;
     }
 
     try {
       setLoading(true);
       await forgotPassword(email.trim());
-      setSuccess("Đã gửi mã OTP đến Gmail của bạn. Vui lòng kiểm tra hộp thư.");
+      setSuccess(t("auth.otpSent"));
       setStep(2);
     } catch (err) {
-      setError(err.message || "Không thể gửi OTP. Vui lòng thử lại.");
+      setError(err.message || t("auth.otpSendError"));
     } finally {
       setLoading(false);
     }
@@ -56,22 +58,22 @@ export default function ForgotPassword({ onBack }) {
     clearMessage();
 
     if (!otp.trim()) {
-      setError("Vui lòng nhập mã OTP");
+      setError(t("auth.fillOtp"));
       return;
     }
 
     if (otp.trim().length !== 6) {
-      setError("Mã OTP phải gồm 6 chữ số");
+      setError(t("auth.otpLength"));
       return;
     }
 
     try {
       setLoading(true);
       await verifyResetOtp(email.trim(), otp.trim());
-      setSuccess("Xác thực OTP thành công. Hãy nhập mật khẩu mới.");
+      setSuccess(t("auth.otpVerified"));
       setStep(3);
     } catch (err) {
-      setError(err.message || "OTP không đúng hoặc đã hết hạn.");
+      setError(err.message || t("auth.otpError"));
     } finally {
       setLoading(false);
     }
@@ -82,29 +84,29 @@ export default function ForgotPassword({ onBack }) {
     clearMessage();
 
     if (!newPassword || !confirmPassword) {
-      setError("Vui lòng nhập đầy đủ mật khẩu mới");
+      setError(t("auth.fillNewPasswords"));
       return;
     }
 
     if (newPassword.length < 6) {
-      setError("Mật khẩu phải có ít nhất 6 ký tự");
+      setError(t("auth.passwordMin"));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Mật khẩu nhập lại không khớp");
+      setError(t("auth.passwordMismatch"));
       return;
     }
 
     try {
       setLoading(true);
       await resetPassword(email.trim(), otp.trim(), newPassword);
-      setSuccess("Đổi mật khẩu thành công. Bạn có thể đăng nhập lại.");
+      setSuccess(t("auth.resetSuccess"));
       setTimeout(() => {
         onBack();
       }, 1500);
     } catch (err) {
-      setError(err.message || "Không thể đổi mật khẩu. Vui lòng thử lại.");
+      setError(err.message || t("auth.resetError"));
     } finally {
       setLoading(false);
     }
@@ -113,21 +115,21 @@ export default function ForgotPassword({ onBack }) {
   const renderHeader = () => {
     if (step === 1) {
       return {
-        title: "Quên mật khẩu?",
-        subtitle: "Nhập email tài khoản để nhận mã OTP khôi phục mật khẩu.",
+        title: t("auth.forgotTitle"),
+        subtitle: t("auth.forgotSubtitle"),
       };
     }
 
     if (step === 2) {
       return {
-        title: "Nhập mã OTP",
-        subtitle: `Mã xác thực đã được gửi đến ${email}`,
+        title: t("auth.otpTitle"),
+        subtitle: t("auth.otpSubtitle", { email }),
       };
     }
 
     return {
-      title: "Tạo mật khẩu mới",
-      subtitle: "Nhập mật khẩu mới để hoàn tất quá trình khôi phục.",
+      title: t("auth.resetTitle"),
+      subtitle: t("auth.resetSubtitle"),
     };
   };
 
@@ -144,7 +146,7 @@ export default function ForgotPassword({ onBack }) {
           className='inline-flex items-center gap-2 text-sm font-semibold text-violet-600 hover:text-violet-700'
         >
           <FiArrowLeft />
-          Quay lại đăng nhập
+          {t("auth.backToLogin")}
         </button>
       }
     >
@@ -177,14 +179,14 @@ export default function ForgotPassword({ onBack }) {
         <form onSubmit={handleSendOtp} className='space-y-5'>
           <label className='block'>
             <span className='mb-2 block text-sm font-semibold text-slate-700'>
-              Email
+              {t("common.email")}
             </span>
 
             <div className='relative'>
               <FiMail className='absolute left-4 top-1/2 -translate-y-1/2 text-slate-400' />
               <input
                 type='email'
-                placeholder='Nhập email của bạn'
+                placeholder={t("auth.enterEmail")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={loading}
@@ -198,7 +200,7 @@ export default function ForgotPassword({ onBack }) {
             disabled={loading}
             className='soft-button gradient-strong h-12 w-full rounded-2xl text-sm font-bold hover:-translate-y-0.5'
           >
-            {loading ? "Đang gửi OTP..." : "Gửi mã OTP"}
+            {loading ? t("auth.sendingOtp") : t("auth.sendOtp")}
             {!loading && <FiSend />}
           </button>
         </form>
@@ -208,7 +210,7 @@ export default function ForgotPassword({ onBack }) {
         <form onSubmit={handleVerifyOtp} className='space-y-5'>
           <label className='block'>
             <span className='mb-2 block text-sm font-semibold text-slate-700'>
-              Mã OTP
+              {t("auth.otpLabel")}
             </span>
 
             <div className='relative'>
@@ -217,7 +219,7 @@ export default function ForgotPassword({ onBack }) {
                 type='text'
                 inputMode='numeric'
                 maxLength={6}
-                placeholder='Nhập 6 chữ số'
+                placeholder={t("auth.otpPlaceholder")}
                 value={otp}
                 onChange={(e) => {
                   const value = e.target.value.replace(/\D/g, "");
@@ -234,7 +236,7 @@ export default function ForgotPassword({ onBack }) {
             disabled={loading}
             className='soft-button gradient-strong h-12 w-full rounded-2xl text-sm font-bold hover:-translate-y-0.5'
           >
-            {loading ? "Đang xác thực..." : "Xác thực OTP"}
+            {loading ? t("auth.verifyingOtp") : t("auth.verifyOtp")}
             {!loading && <FiCheckCircle />}
           </button>
 
@@ -244,7 +246,7 @@ export default function ForgotPassword({ onBack }) {
             onClick={handleSendOtp}
             className='w-full rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-bold text-violet-600 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60'
           >
-            Gửi lại mã OTP
+            {t("auth.resendOtp")}
           </button>
         </form>
       )}
@@ -253,14 +255,14 @@ export default function ForgotPassword({ onBack }) {
         <form onSubmit={handleResetPassword} className='space-y-5'>
           <label className='block'>
             <span className='mb-2 block text-sm font-semibold text-slate-700'>
-              Mật khẩu mới
+              {t("auth.newPassword")}
             </span>
 
             <div className='relative'>
               <FiLock className='absolute left-4 top-1/2 -translate-y-1/2 text-slate-400' />
               <input
                 type='password'
-                placeholder='Nhập mật khẩu mới'
+                placeholder={t("auth.newPasswordPlaceholder")}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={loading}
@@ -271,14 +273,14 @@ export default function ForgotPassword({ onBack }) {
 
           <label className='block'>
             <span className='mb-2 block text-sm font-semibold text-slate-700'>
-              Nhập lại mật khẩu
+              {t("auth.repeatNewPassword")}
             </span>
 
             <div className='relative'>
               <FiLock className='absolute left-4 top-1/2 -translate-y-1/2 text-slate-400' />
               <input
                 type='password'
-                placeholder='Nhập lại mật khẩu mới'
+                placeholder={t("auth.repeatNewPasswordPlaceholder")}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 disabled={loading}
@@ -292,7 +294,7 @@ export default function ForgotPassword({ onBack }) {
             disabled={loading}
             className='soft-button gradient-strong h-12 w-full rounded-2xl text-sm font-bold hover:-translate-y-0.5'
           >
-            {loading ? "Đang đổi mật khẩu..." : "Đổi mật khẩu"}
+            {loading ? t("auth.resettingPassword") : t("auth.resetPassword")}
             {!loading && <FiCheckCircle />}
           </button>
         </form>
