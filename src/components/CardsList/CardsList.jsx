@@ -36,6 +36,7 @@ function ThumbnailReorderItem({
   shouldWiggle,
   isReorderMode,
   onDragStart,
+  onDrag,
   onDragEnd,
   children,
   ...props
@@ -58,6 +59,7 @@ function ThumbnailReorderItem({
         bounceDamping: 48,
       }}
       onDragStart={onDragStart}
+      onDrag={onDrag}
       onDragEnd={onDragEnd}
       animate={{
         scale: isActive || isDragging ? 1.08 : 1,
@@ -148,6 +150,8 @@ export default function CardsList({
   const dragStartCardsRef = useRef([]);
   const pendingReorderCardsRef = useRef([]);
   const suppressThumbnailPressRef = useRef(false);
+  const thumbnailAutoScrollFrameRef = useRef(null);
+  const thumbnailAutoScrollSpeedRef = useRef(0);
 
   const cardGestureAreaRef = useRef(null);
   const touchPointersRef = useRef(new Map());
@@ -588,6 +592,7 @@ export default function CardsList({
       if (openProgressTimerRef.current) {
         clearInterval(openProgressTimerRef.current);
       }
+      stopThumbnailAutoScroll();
     };
   }, []);
 
@@ -725,6 +730,71 @@ export default function CardsList({
     setDraggingCardId(localId);
   };
 
+  const stopThumbnailAutoScroll = () => {
+    thumbnailAutoScrollSpeedRef.current = 0;
+
+    if (thumbnailAutoScrollFrameRef.current) {
+      cancelAnimationFrame(thumbnailAutoScrollFrameRef.current);
+      thumbnailAutoScrollFrameRef.current = null;
+    }
+  };
+
+  const runThumbnailAutoScroll = () => {
+    const list = thumbnailListRef.current;
+    const speed = thumbnailAutoScrollSpeedRef.current;
+
+    if (!list || !speed) {
+      thumbnailAutoScrollFrameRef.current = null;
+      return;
+    }
+
+    const maxScrollLeft = list.scrollWidth - list.clientWidth;
+    const atStart = list.scrollLeft <= 0 && speed < 0;
+    const atEnd = list.scrollLeft >= maxScrollLeft && speed > 0;
+
+    if (atStart || atEnd) {
+      stopThumbnailAutoScroll();
+      return;
+    }
+
+    list.scrollLeft += speed;
+    thumbnailAutoScrollFrameRef.current = requestAnimationFrame(
+      runThumbnailAutoScroll,
+    );
+  };
+
+  const handleThumbnailDrag = (_event, info) => {
+    if (!isReorderMode || !draggingCardId) return;
+
+    const list = thumbnailListRef.current;
+    const clientX = info?.point?.x;
+
+    if (!list || !Number.isFinite(clientX)) return;
+
+    const rect = list.getBoundingClientRect();
+    const edgeSize = Math.min(96, rect.width * 0.22);
+    const maxSpeed = 22;
+    let nextSpeed = 0;
+
+    if (clientX < rect.left + edgeSize) {
+      const ratio = (rect.left + edgeSize - clientX) / edgeSize;
+      nextSpeed = -Math.ceil(Math.min(1, ratio) * maxSpeed);
+    } else if (clientX > rect.right - edgeSize) {
+      const ratio = (clientX - (rect.right - edgeSize)) / edgeSize;
+      nextSpeed = Math.ceil(Math.min(1, ratio) * maxSpeed);
+    }
+
+    thumbnailAutoScrollSpeedRef.current = nextSpeed;
+
+    if (nextSpeed && !thumbnailAutoScrollFrameRef.current) {
+      thumbnailAutoScrollFrameRef.current = requestAnimationFrame(
+        runThumbnailAutoScroll,
+      );
+    } else if (!nextSpeed) {
+      stopThumbnailAutoScroll();
+    }
+  };
+
   const handleThumbnailReorder = (nextOrder) => {
     if (!isReorderMode) return;
     const nextCards = applyOrderIndexes(nextOrder);
@@ -734,6 +804,7 @@ export default function CardsList({
 
   const handleThumbnailReorderCommit = async () => {
     const reorderedCards = pendingReorderCardsRef.current;
+    stopThumbnailAutoScroll();
     setDraggingCardId(null);
 
     requestAnimationFrame(() => {
@@ -764,6 +835,7 @@ export default function CardsList({
   };
 
   const handleToggleReorderMode = () => {
+    stopThumbnailAutoScroll();
     setDraggingCardId(null);
     suppressThumbnailPressRef.current = false;
     pendingReorderCardsRef.current = cards;
@@ -1313,6 +1385,7 @@ export default function CardsList({
                     isReorderMode={isReorderMode}
                     shouldWiggle={shouldWiggle}
                     onDragStart={() => handleThumbnailDragStart(item.localId)}
+                    onDrag={handleThumbnailDrag}
                     onDragEnd={handleThumbnailReorderCommit}
                     key={item.localId}
                     type='button'

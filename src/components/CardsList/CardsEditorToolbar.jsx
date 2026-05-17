@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { FiCornerUpLeft, FiCornerUpRight, FiMove, FiPlus } from "react-icons/fi";
+import { FiCornerUpLeft, FiCornerUpRight, FiPlus, FiShuffle } from "react-icons/fi";
 import { Player } from "@lottiefiles/react-lottie-player";
 import { BRUSH_TYPES, TOOL_LIST, cn } from "./constants";
 import usePenPress from "./hooks/usePenPress";
@@ -40,7 +40,7 @@ export default function CardsEditorToolbar({
   return (
     <div className='cards-editor-toolbar rounded-xl border border-slate-200 bg-white/50 px-3 py-1.5 shadow-sm'>
       <div className='cards-editor-toolbar-scroll flex w-full flex-col gap-2 overflow-x-auto pb-0.5'>
-        <div className='cards-editor-toolbar-row flex min-w-max items-center gap-2'>
+        <div className='cards-editor-toolbar-row flex min-w-full items-stretch gap-2'>
           <div className='flex items-center gap-1 rounded-xl border border-slate-100 bg-slate-50 p-1'>
             <button
               type='button'
@@ -143,27 +143,35 @@ export default function CardsEditorToolbar({
             })}
           </div>
 
-          <button
-            type='button'
-            disabled={!canAddCard}
-            {...bindPress(handleAddCardPair, !canAddCard)}
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition touch-none",
-              canAddCard
-                ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
-                : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400",
-            )}
-          >
-            <FiPlus size={16} />
-            <span>Thêm thẻ</span>
-          </button>
+          <div className='flex min-w-[220px] flex-1 items-stretch gap-2'>
+            <button
+              type='button'
+              {...bindPress(onToggleReorderMode)}
+              className={cn(
+                "inline-flex min-h-[42px] flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition touch-none",
+                isReorderMode
+                  ? "border-pink-200 bg-pink-500 text-white shadow-sm hover:bg-pink-600"
+                  : "border-pink-200 bg-pink-50 text-pink-700 hover:bg-pink-100",
+              )}
+            >
+              <FiShuffle size={16} />
+              <span>Sắp xếp</span>
+            </button>
 
-          <div className='flex items-center gap-1 shrink-0'>
-            {MONKEY_LIST.map((anim, i) => (
-              <div key={i} className='h-9 w-9 transition-all duration-300'>
-                <Player autoplay loop src={anim} className='h-full w-full' />
-              </div>
-            ))}
+            <button
+              type='button'
+              disabled={!canAddCard}
+              {...bindPress(handleAddCardPair, !canAddCard)}
+              className={cn(
+                "inline-flex min-h-[42px] flex-1 items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition touch-none",
+                canAddCard
+                  ? "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                  : "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-400",
+              )}
+            >
+              <FiPlus size={16} />
+              <span>Thêm thẻ</span>
+            </button>
           </div>
         </div>
 
@@ -231,19 +239,13 @@ export default function CardsEditorToolbar({
             </span>
           </div>
 
-          <button
-            type='button'
-            {...bindPress(onToggleReorderMode)}
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition touch-none",
-              isReorderMode
-                ? "border-pink-200 bg-pink-500 text-white shadow-sm"
-                : "border-slate-100 bg-slate-50 text-slate-600 hover:bg-white hover:text-sky-700",
-            )}
-          >
-            <FiMove size={15} />
-            <span>Sắp xếp thẻ</span>
-          </button>
+          <div className='flex shrink-0 items-center gap-1 rounded-lg border border-slate-100 bg-slate-50/50 px-2 py-1'>
+            {MONKEY_LIST.map((anim, i) => (
+              <div key={i} className='h-8 w-8 transition-all duration-300'>
+                <Player autoplay loop src={anim} className='h-full w-full' />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

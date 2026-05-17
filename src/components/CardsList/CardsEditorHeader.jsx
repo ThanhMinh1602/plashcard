@@ -92,12 +92,6 @@ export default function CardsEditorHeader({
         </div>
 
         <div className='cards-editor-header-actions flex shrink-0 items-center gap-3 text-sm'>
-          <div className='hidden items-center gap-2 md:flex'>
-            <span className='rounded-md bg-slate-100 px-2.5 py-1 font-medium text-slate-600'>
-              <span className='font-bold text-slate-800'>{cardsCount}</span> thẻ
-            </span>
-          </div>
-
           {statusMessage && (
             <div
               className={cn(
@@ -118,6 +112,12 @@ export default function CardsEditorHeader({
               <span className='truncate'>{statusMessage}</span>
             </div>
           )}
+
+          <div className='hidden items-center gap-2 md:flex'>
+            <span className='rounded-md bg-slate-100 px-2.5 py-1 font-medium text-slate-600'>
+              <span className='font-bold text-slate-800'>{cardsCount}</span> thẻ
+            </span>
+          </div>
 
           <button
             type='button'
