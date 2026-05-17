@@ -21,6 +21,8 @@ export default function PackageTrash({ user, onBack }) {
   const [restoreTarget, setRestoreTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [clearTrashOpen, setClearTrashOpen] = useState(false);
+  const [isClearingTrash, setIsClearingTrash] = useState(false);
 
   useEffect(() => {
     loadDeletedPackages();
@@ -74,6 +76,28 @@ export default function PackageTrash({ user, onBack }) {
     }
   };
 
+  const handleClearTrash = async () => {
+    if (packages.length === 0) return;
+
+    try {
+      setIsClearingTrash(true);
+      setBusyId('clear-trash');
+
+      await Promise.all(
+        packages.map((item) => permanentlyDeletePackage(user.uid, item.id)),
+      );
+
+      setPackages([]);
+      setClearTrashOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert('Lỗi dọn thùng rác');
+    } finally {
+      setIsClearingTrash(false);
+      setBusyId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className='flex min-h-screen items-center justify-center bg-gradient-to-br from-rose-50 via-orange-50 to-amber-50 px-4'>
@@ -116,14 +140,29 @@ export default function PackageTrash({ user, onBack }) {
                   </div>
                 </div>
 
-                <button
-                  type='button'
-                  onClick={loadDeletedPackages}
-                  className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-4 text-sm font-black text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50'
-                >
-                  <FiRefreshCcw size={16} />
-                  <span>Tải lại</span>
-                </button>
+                <div className='flex flex-wrap items-center gap-2'>
+                  {packages.length > 0 && (
+                    <button
+                      type='button'
+                      onClick={() => setClearTrashOpen(true)}
+                      disabled={isClearingTrash}
+                      className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-rose-50 px-4 text-sm font-black text-rose-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
+                    >
+                      <FiTrash2 size={16} />
+                      <span>Dọn thùng rác</span>
+                    </button>
+                  )}
+
+                  <button
+                    type='button'
+                    onClick={loadDeletedPackages}
+                    disabled={isClearingTrash}
+                    className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-sky-100 bg-white/90 px-4 text-sm font-black text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
+                  >
+                    <FiRefreshCcw size={16} />
+                    <span>Tải lại</span>
+                  </button>
+                </div>
               </div>
 
               <h1 className='text-3xl font-black tracking-tight text-slate-900'>
@@ -196,7 +235,7 @@ export default function PackageTrash({ user, onBack }) {
                   <button
                     className='package-add-gradient inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-500 to-pink-500 bg-[length:200%_200%] px-3 text-sm font-black text-white shadow-[0_16px_38px_rgba(59,130,246,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
                     onClick={() => setRestoreTarget(item)}
-                    disabled={busyId === item.id}
+                    disabled={busyId === item.id || isClearingTrash}
                     type='button'
                   >
                     <FiRefreshCcw size={16} />
@@ -206,7 +245,7 @@ export default function PackageTrash({ user, onBack }) {
                   <button
                     className='inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-100 bg-white px-3 text-sm font-black text-rose-600 shadow-sm transition hover:-translate-y-0.5 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0'
                     onClick={() => setDeleteTarget(item)}
-                    disabled={busyId === item.id}
+                    disabled={busyId === item.id || isClearingTrash}
                     type='button'
                   >
                     <FiTrash2 size={16} />
@@ -245,6 +284,18 @@ export default function PackageTrash({ user, onBack }) {
         loading={Boolean(deleteTarget && busyId === deleteTarget.id)}
         onConfirm={handlePermanentDelete}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmModal
+        open={clearTrashOpen}
+        title='Dọn toàn bộ thùng rác?'
+        message={`Toàn bộ ${packages.length} gói trong thùng rác sẽ bị xoá vĩnh viễn cùng tất cả flashcard bên trong. Không thể khôi phục sau bước này.`}
+        confirmText='Dọn thùng rác'
+        cancelText='Huỷ'
+        variant='danger'
+        loading={isClearingTrash}
+        onConfirm={handleClearTrash}
+        onClose={() => setClearTrashOpen(false)}
       />
 
       <style
